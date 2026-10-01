@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}EXIT CODE 0 — IEEE Computer Society Debugging Championship{% endblock %}
+
+{% block content %}
+<div class="container">
+  <section class="hero-section animate-fade-in">
+    <div class="terminal-badge">
+      <span class="pulse-dot"></span> IEEE WEEK 2026 COMPETITIVE DEBUGGING CHAMPIONSHIP
+    </div>
+
+    <h1 class="hero-title text-primary">EXIT CODE 0</h1>
+    <div class="hero-tagline">
+      <span>Find the bug.</span> &bull; 
+      <span>Diagnose root cause.</span> &bull; 
+      <span>Exit clean.</span>
+    </div>
+
+    <div class="hero-org mono">
+      IEEE Computer Society Student Branch Chapter<br>
+      Amrita Vishwa Vidyapeetham, Bengaluru
+    </div>
+
+    <!-- Live Telemetry Terminal Window -->
+    <div class="terminal-telemetry">
+      <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.75rem; color: var(--text-dim); display:flex; justify-content:space-between;">
+        <span>ARENA_DIAGNOSTICS_V2.0</span>
+        <span>DEBUG_NODE_01</span>
+      </div>
+      <div class="line">
+        <span><span class="prompt">&gt;</span> SYSTEM STATUS:</span>
+        <span class="text-primary font-bold">ONLINE</span>
+      </div>
+      <div class="line">
+        <span><span class="prompt">&gt;</span> DEBUG CHALLENGES:</span>
+        <span class="text-warning font-bold">30 VERIFIED CODES / 3 PER TEAM</span>
+      </div>
+      <div class="line">
+        <span><span class="prompt">&gt;</span> TEAMS REGISTERED:</span>
+        <span id="connected-teams-count" class="text-secondary font-bold">{{ connected_teams }}</span>
+      </div>
+      <div class="line">
+        <span><span class="prompt">&gt;</span> EVENT STATUS:</span>
+        <span class="text-primary font-bold">{{ event_state.current_state }}</span>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+      {% if session.get('team_id') %}
+        <a href="/debug-arena" class="btn btn-primary" style="font-size: 1.1rem; padding: 0.85rem 2.25rem;">
+          [ ENTER DEBUG ARENA ]
+        </a>
+        <a href="/score" class="btn btn-secondary" style="font-size: 1.1rem; padding: 0.85rem 1.75rem;">
+          VIEW MY SCORE
+        </a>
+      {% else %}
+        <a href="/login" class="btn btn-primary" style="font-size: 1.1rem; padding: 0.85rem 2.25rem;">
+          [ REGISTER TEAM &bull; ENTER ARENA ]
+        </a>
+      {% endif %}
+      <a href="/leaderboard" class="btn btn-outline" style="font-size: 1.1rem; padding: 0.85rem 1.75rem;">
+        LEADERSHIP BOARD
+      </a>
+    </div>
+  </section>
+
+  <!-- Format Overview Cards -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+    
+    <div class="card" style="border-top: 3px solid var(--primary);">
+      <div class="card-header">
+        <span class="mono text-primary font-bold">THE DEBUG ARENA</span>
+        <span class="badge badge-primary">3 STRAIGHT CODES</span>
+      </div>
+      <h3 style="margin-bottom: 0.5rem;">Timed Code Challenges</h3>
+      <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">
+        Each team of 3 receives 3 straight randomized coding challenges across Python, C, and Java:
+      </p>
+      <ul style="list-style: none; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); line-height: 1.8;">
+        <li><span class="text-primary">&gt;</span> <strong>1.5 Minutes (90s)</strong> server countdown per challenge</li>
+        <li><span class="text-secondary">&gt;</span> L1: Syntax &amp; Lexical Errors</li>
+        <li><span class="text-warning">&gt;</span> L2: Algorithmic &amp; Logic Flaws</li>
+        <li><span class="text-error">&gt;</span> L3 &amp; L4: Runtime Exceptions &amp; Edge Cases</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--secondary);">
+      <div class="card-header">
+        <span class="mono text-secondary font-bold">SCORING RUBRIC</span>
+        <span class="badge badge-secondary">100% OBJECTIVE</span>
+      </div>
+      <h3 style="margin-bottom: 0.5rem;">Diagnostic Precision</h3>
+      <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">
+        Scoring evaluates complete debugging competence, not just guessing:
+      </p>
+      <ul style="list-style: none; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); line-height: 1.8;">
+        <li><span class="text-secondary">&gt;</span> Error Type Identification (15%)</li>
+        <li><span class="text-secondary">&gt;</span> Precise Bug Location (10%)</li>
+        <li><span class="text-secondary">&gt;</span> Root Cause Explanation (25%)</li>
+        <li><span class="text-secondary">&gt;</span> Expected Output Prediction (20%)</li>
+        <li><span class="text-primary">&gt;</span> Verified Correction Fix (30%)</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--warning);">
+      <div class="card-header">
+        <span class="mono text-warning font-bold">TACTICAL POWER-UPS</span>
+        <span class="badge badge-warning">ONE-TIME USAGE</span>
+      </div>
+      <h3 style="margin-bottom: 0.5rem;">Strategic Modifiers</h3>
+      <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">
+        Equip tactical power-ups when facing difficult snippets:
+      </p>
+      <ul style="list-style: none; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); line-height: 1.8;">
+        <li><span class="text-warning">&gt;</span> <strong>🦆 Rubber Duck:</strong> Unlocks hint with -10% penalty</li>
+        <li><span class="text-secondary">&gt;</span> <strong>⏪ Git Revert:</strong> Swaps code for an equivalent</li>
+        <li><span class="text-primary">&gt;</span> <strong>⚡ Double Commit:</strong> High risk &bull; 2x points if accurate!</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

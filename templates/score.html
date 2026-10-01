@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}My Score & Performance — {{ team.name }} — EXIT CODE 0{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1250px; margin-top: 2rem;">
+
+  <!-- Team Profile & Score Banner -->
+  <div class="card" style="border-top: 4px solid var(--primary); margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.5rem;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+          <span class="mono text-primary font-bold" style="font-size: 1.6rem;">{{ team.name }}</span>
+          <span class="badge badge-secondary mono">{{ team.id }}</span>
+          <span class="badge {{ 'badge-primary' if team.is_active else 'badge-danger' }} mono">
+            {{ 'ACTIVE ACCOUNT' if team.is_active else 'DISABLED' }}
+          </span>
+        </div>
+        <div class="mono text-muted" style="font-size: 0.85rem;">
+          <span>Members: {{ team.member1 }} (Lead), {{ team.member2 }}, {{ team.member3 }}</span>
+          {% if team.email %}
+            <span style="margin-left: 0.75rem;">&bull; Contact: {{ team.email }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Quick Stats Pills -->
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <div class="stat-badge">
+          <div class="stat-label">LEADERBOARD RANK</div>
+          <div class="stat-value text-primary font-bold">#{{ rank }} <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 400;">/ {{ total_teams }}</span></div>
+        </div>
+        <div class="stat-badge">
+          <div class="stat-label">TOTAL SCORE</div>
+          <div class="stat-value text-secondary font-bold">{{ score.debug_score | round(1) if score else 0.0 }} <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 400;">PTS</span></div>
+        </div>
+        <div class="stat-badge">
+          <div class="stat-label">SOLVED CODES</div>
+          <div class="stat-value text-warning font-bold">{{ solved_count }} <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 400;">/ 3</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Powerups Inventory -->
+  <div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header" style="margin-bottom: 0.75rem;">
+      <span class="mono text-main font-bold">&gt; TEAM POWER-UPS INVENTORY</span>
+      <span class="badge badge-muted mono">ONE-TIME PER EVENT</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+      <div class="powerup-card {{ 'used' if powerups.RUBBER_DUCK.is_used else '' }}" style="padding: 0.85rem;">
+        <div>
+          <div style="font-size: 1.1rem; font-weight: 700;">🦆 Rubber Duck</div>
+          <div class="powerup-desc">10% penalty hint reveal</div>
+        </div>
+        <span class="badge {{ 'badge-muted' if powerups.RUBBER_DUCK.is_used else 'badge-primary' }} mono">
+          {{ 'USED' if powerups.RUBBER_DUCK.is_used else 'READY' }}
+        </span>
+      </div>
+
+      <div class="powerup-card {{ 'used' if powerups.GIT_REVERT.is_used else '' }}" style="padding: 0.85rem;">
+        <div>
+          <div style="font-size: 1.1rem; font-weight: 700;">⏪ Git Revert</div>
+          <div class="powerup-desc">Swap code for an equivalent</div>
+        </div>
+        <span class="badge {{ 'badge-muted' if powerups.GIT_REVERT.is_used else 'badge-secondary' }} mono">
+          {{ 'USED' if powerups.GIT_REVERT.is_used else 'READY' }}
+        </span>
+      </div>
+
+      <div class="powerup-card {{ 'used' if powerups.DOUBLE_COMMIT.is_used else ('' if not powerups.DOUBLE_COMMIT.is_armed else 'armed') }}" style="padding: 0.85rem;">
+        <div>
+          <div style="font-size: 1.1rem; font-weight: 700;">⚡ Double Commit</div>
+          <div class="powerup-desc">2x points or 0 based on accuracy</div>
+        </div>
+        <span class="badge {{ 'badge-muted' if powerups.DOUBLE_COMMIT.is_used else ('badge-warning' if powerups.DOUBLE_COMMIT.is_armed else 'badge-primary') }} mono">
+          {{ 'USED' if powerups.DOUBLE_COMMIT.is_used else ('ARMED' if powerups.DOUBLE_COMMIT.is_armed else 'READY') }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detailed Challenges Score Breakdown -->
+  <div style="margin-bottom: 1.5rem;">
+    <h3 class="mono text-primary font-bold" style="font-size: 1.3rem; margin-bottom: 1rem;">
+      &gt; CHALLENGE SCORE BREAKDOWN
+    </h3>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 2.5rem;">
+    {% for ch in challenges_detail %}
+      <div class="card" style="border-left: 4px solid {{ 'var(--primary)' if ch.is_completed else ('var(--error)' if ch.is_locked else 'var(--secondary)') }};">
+        <div class="card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <span class="mono font-bold text-main" style="font-size: 1.15rem;">
+              CODE 0{{ ch.order }}: {{ ch.title }}
+            </span>
+            <span class="badge badge-secondary">{{ ch.language }}</span>
+            <span class="badge badge-muted">LEVEL {{ ch.level }} ({{ ch.difficulty }})</span>
+            <span class="badge badge-primary">{{ ch.base_points }} MAX PTS</span>
+          </div>
+
+          <div>
+            {% if ch.is_completed %}
+              <span class="badge badge-primary mono" style="font-size: 0.85rem; padding: 0.35rem 0.75rem;">
+                ✓ SOLVED &bull; {{ ch.earned_points }} / {{ ch.base_points }} PTS
+              </span>
+            {% elif ch.is_locked %}
+              <span class="badge badge-error mono" style="font-size: 0.85rem; padding: 0.35rem 0.75rem;">
+                ⏹ TIME EXPIRED / LOCKED
+              </span>
+            {% else %}
+              <a href="/debug-arena?order={{ ch.order }}" class="btn btn-primary" style="font-size: 0.8rem; padding: 0.3rem 0.75rem;">
+                ▶ RESUME IN ARENA
+              </a>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if ch.submission %}
+          <!-- Detailed scoring rubric results -->
+          <div style="background: rgba(0, 0, 0, 0.35); padding: 1rem 1.25rem; border-radius: var(--radius-sm); margin-top: 0.75rem;">
+            <div class="mono text-muted" style="font-size: 0.75rem; margin-bottom: 0.75rem; text-transform: uppercase;">
+              Automated Diagnostic Rubric Evaluation:
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+              <div class="rubric-stat-box">
+                <span class="text-muted">Error Type:</span>
+                <span class="mono font-bold text-main">{{ ch.submission.error_type_score }} pts</span>
+              </div>
+              <div class="rubric-stat-box">
+                <span class="text-muted">Bug Location:</span>
+                <span class="mono font-bold text-main">{{ ch.submission.error_loc_score }} pts</span>
+              </div>
+              <div class="rubric-stat-box">
+                <span class="text-muted">Root Cause:</span>
+                <span class="mono font-bold text-main">{{ ch.submission.cause_score }} pts</span>
+              </div>
+              <div class="rubric-stat-box">
+                <span class="text-muted">Expected Output:</span>
+                <span class="mono font-bold text-main">{{ ch.submission.output_score }} pts</span>
+              </div>
+              <div class="rubric-stat-box">
+                <span class="text-muted">Correction Fix:</span>
+                <span class="mono font-bold text-main">{{ ch.submission.correction_score }} pts</span>
+              </div>
+            </div>
+
+            <!-- Modifiers -->
+            {% if ch.submission.is_double_commit %}
+              <div class="badge badge-warning mono" style="margin-bottom: 0.75rem; display: inline-block;">
+                ⚡ Double Commit Power-up was armed for this challenge!
+              </div>
+            {% endif %}
+
+            <!-- Team Submitted Answers (Read-Only) -->
+            <div style="border-top: 1px solid var(--border-color); padding-top: 0.75rem; font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.6;">
+              <div class="text-muted" style="margin-bottom: 0.35rem; font-weight: 600;">Your Team's Submission:</div>
+              <div><span class="text-dim">Identified Error Type:</span> <span class="text-secondary">{{ ch.submission.error_type or 'N/A' }}</span></div>
+              <div><span class="text-dim">Reported Location:</span> <span class="text-secondary">{{ ch.submission.error_location or 'N/A' }}</span></div>
+              <div><span class="text-dim">Reported Output:</span> <span class="text-secondary">{{ ch.submission.expected_output or 'N/A' }}</span></div>
+              <div><span class="text-dim">Explanation of Cause:</span> <span class="text-main">{{ ch.submission.cause or 'N/A' }}</span></div>
+              <div><span class="text-dim">Proposed Correction:</span> <span class="text-main">{{ ch.submission.correction or 'N/A' }}</span></div>
+              <div class="text-dim" style="font-size: 0.7rem; margin-top: 0.5rem;">Submitted at: {{ ch.submission.submitted_at }}</div>
+            </div>
+          </div>
+        {% else %}
+          <div class="text-muted mono" style="font-size: 0.85rem; padding: 1rem 0;">
+            No submission recorded yet for this challenge. 
+            {% if not ch.is_locked %}
+              <a href="/debug-arena?order={{ ch.order }}" class="text-primary">&rarr; Open in Arena</a>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  <div style="display: flex; justify-content: center; gap: 1rem; margin-bottom: 3rem;">
+    <a href="/debug-arena" class="btn btn-primary" style="padding: 0.75rem 2rem;">
+      &larr; GO TO DEBUG ARENA
+    </a>
+    <a href="/leaderboard" class="btn btn-secondary" style="padding: 0.75rem 2rem;">
+      VIEW LEADERBOARD &rarr;
+    </a>
+  </div>
+
+</div>
+{% endblock %}

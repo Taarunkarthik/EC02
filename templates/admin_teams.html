@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Team Management (3 Members) — Admin Console{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1300px; margin-top: 1.5rem;">
+  
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <div>
+      <h2 class="mono text-primary font-bold">&gt; REGISTERED TEAMS (3 MEMBERS / TEAM)</h2>
+      <div class="text-muted mono" style="font-size: 0.85rem;">{{ teams|length }} Teams Registered</div>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+      <a href="/admin/debuggings" class="btn btn-outline">&larr; Back to Debuggings Console</a>
+      <a href="/admin/export/teams.csv" class="btn btn-secondary">Export Teams CSV</a>
+    </div>
+  </div>
+
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>TEAM ID</th>
+            <th>TEAM NAME</th>
+            <th>3 MEMBERS ROSTER</th>
+            <th>DEBUG SCORE</th>
+            <th>TOTAL SCORE</th>
+            <th>STATUS</th>
+            <th>ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if teams and teams|length > 0 %}
+            {% for t in teams %}
+              <tr>
+                <td class="mono font-bold">{{ t.id }}</td>
+                <td class="mono font-bold text-main">{{ t.name }}</td>
+                <td style="font-size: 0.85rem; line-height: 1.5;">
+                  1. {{ t.member1 }} (Lead)<br>
+                  2. {{ t.member2 }}<br>
+                  3. {{ t.member3 }}
+                </td>
+                <td class="mono text-primary font-bold">{{ t.debug_score | round(1) if t.debug_score else 0 }}</td>
+                <td class="mono text-primary font-bold" style="font-size: 1.1rem;">{{ t.final_score | round(1) if t.final_score else 0 }}</td>
+                <td>
+                  <span class="badge {{ 'badge-primary' if t.is_active else 'badge-error' }}">
+                    {{ 'ACTIVE' if t.is_active else 'DISABLED' }}
+                  </span>
+                </td>
+                <td>
+                  <form method="POST" action="/admin/team/toggle-status" style="display:inline;">
+                    <input type="hidden" name="team_id" value="{{ t.id }}">
+                    <button type="submit" class="btn {{ 'btn-danger' if t.is_active else 'btn-primary' }}" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+                      {{ 'Disable' if t.is_active else 'Enable' }}
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="text-muted" style="text-align: center; padding: 2.5rem;">No teams registered yet.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{
+  "event_name": "EXIT CODE 0",
+  "tagline": "Find the Bug. Fix the Code. Exit Clean.",
+  "event": "IEEE Week Technical Event",
+  "organizer": "IEEE Computer Society, Amrita Vishwa Vidyapeetham, Bengaluru",
+  "date": "7 October 2026",
+  "day": "Wednesday",
+  "time": "2:50 PM – 4:00 PM",
+  "duration_minutes": 70,
+  "team_min_size": 2,
+  "team_max_size": 3,
+  "expected_participants": 60,
+  "target_audience": "B.Tech & M.Tech Students",
+  "debug_weight": 1.0,
+  "total_questions": 30
+}

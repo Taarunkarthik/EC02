@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Team Registration — EXIT CODE 0{% endblock %}
+
+{% block content %}
+<div class="panel-wrap">
+  <div class="card panel">
+    <div class="eyebrow">EXIT CODE 0</div>
+    <h1>Join the competition</h1>
+    <p class="sub">2&ndash;3 members required per team.</p>
+
+    {% if error %}<div class="alert alert-error" role="alert" style="margin-bottom:1rem"><span>✕</span><span>{{ error }}</span></div>{% endif %}
+
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab" role="tab" id="tab-reg" aria-selected="true" aria-controls="panel-reg">Team Registration</button>
+      <button type="button" class="tab" role="tab" id="tab-login" aria-selected="false" aria-controls="panel-login">Existing Team</button>
+    </div>
+
+    <form method="POST" id="panel-reg" class="tab-panel" role="tabpanel" aria-labelledby="tab-reg" novalidate>
+      <input type="hidden" name="action" value="register">
+      <div class="form-group">
+        <label class="form-label" for="name">Team Name</label>
+        <input class="form-control" id="name" name="name" maxlength="40" autocomplete="off" required value="{{ request.form.get('name','') }}">
+        <div class="field-msg" id="name-msg"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="member1">Member 1</label>
+        <input class="form-control" id="member1" name="member1" maxlength="60" autocomplete="off" required value="{{ request.form.get('member1','') }}">
+        <div class="field-msg" id="member1-msg"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="member2">Member 2</label>
+        <input class="form-control" id="member2" name="member2" maxlength="60" autocomplete="off" required value="{{ request.form.get('member2','') }}">
+        <div class="field-msg" id="member2-msg"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="member3">Member 3 <span class="text-dim">&mdash; optional</span></label>
+        <input class="form-control" id="member3" name="member3" maxlength="60" autocomplete="off" value="{{ request.form.get('member3','') }}">
+      </div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit" id="reg-btn">REGISTER TEAM</button>
+    </form>
+
+    <form method="POST" id="panel-login" class="tab-panel" role="tabpanel" aria-labelledby="tab-login" hidden>
+      <input type="hidden" name="action" value="login">
+      <div class="form-group">
+        <label class="form-label" for="team_lookup">Team ID or Team Name</label>
+        <input class="form-control" id="team_lookup" name="team_lookup" placeholder="EX0-014" autocomplete="off" required>
+      </div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit">SIGN IN</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/register.js') }}"></script>{% endblock %}

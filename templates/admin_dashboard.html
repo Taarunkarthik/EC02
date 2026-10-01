@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block title %}Master Admin Console — EXIT CODE 0{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 1440px; margin: 1.5rem auto; padding: 0 1.5rem;">
+  
+  <!-- Admin Header Bar -->
+  <div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem 1.5rem; border-top: 4px solid var(--primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+        <span class="badge badge-primary mono" style="font-size: 0.75rem;">ADMIN CONTROL NODE</span>
+        <span class="mono text-muted" style="font-size: 0.8rem;">IEEE Computer Society &bull; Amrita Bengaluru</span>
+      </div>
+      <h1 class="mono font-bold" style="font-size: 1.6rem; color: var(--text-main); margin: 0;">
+        TOURNAMENT CONTROL CENTER
+      </h1>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+      <a href="/admin/export/teams.csv" class="btn btn-outline" style="font-size: 0.82rem; padding: 0.4rem 0.85rem;">
+        📥 Export Teams CSV
+      </a>
+      <a href="/admin/export/results.csv" class="btn btn-outline" style="font-size: 0.82rem; padding: 0.4rem 0.85rem;">
+        📥 Export Results CSV
+      </a>
+      <a href="/leaderboard" class="btn btn-secondary" style="font-size: 0.82rem; padding: 0.4rem 0.85rem;" target="_blank">
+        📊 View Leaderboard ↗
+      </a>
+      <a href="/admin/logout" class="btn btn-outline" style="font-size: 0.82rem; padding: 0.4rem 0.85rem;">
+        Admin Logout
+      </a>
+    </div>
+  </div>
+
+  <!-- Telemetry Overview Cards -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+    <div class="card">
+      <div class="text-muted mono" style="font-size: 0.78rem;">TOURNAMENT STATUS</div>
+      <div class="mono font-bold text-primary" id="admin-telemetry-status" style="font-size: 1.5rem; margin-top: 0.35rem;">
+        <span class="pulse-dot"></span> {{ event_state.event_status }}
+      </div>
+    </div>
+    <div class="card">
+      <div class="text-muted mono" style="font-size: 0.78rem;">SERVER TIMER (70 MIN)</div>
+      <div class="mono font-bold text-warning" id="admin-telemetry-timer" style="font-size: 1.5rem; margin-top: 0.35rem;">
+        {{ event_state.formatted_time }}
+      </div>
+    </div>
+    <div class="card">
+      <div class="text-muted mono" style="font-size: 0.78rem;">REGISTERED TEAMS</div>
+      <div class="mono font-bold text-main" id="admin-telemetry-teams" style="font-size: 1.5rem; margin-top: 0.35rem;">
+        {{ team_count }}
+      </div>
+    </div>
+    <div class="card">
+      <div class="text-muted mono" style="font-size: 0.78rem;">TOTAL SUBMISSIONS</div>
+      <div class="mono font-bold text-secondary" style="font-size: 1.5rem; margin-top: 0.35rem;">
+        {{ submission_count }}
+      </div>
+    </div>
+    <div class="card">
+      <div class="text-muted mono" style="font-size: 0.78rem;">VERIFIED QUESTIONS</div>
+      <div class="mono font-bold text-primary" style="font-size: 1.5rem; margin-top: 0.35rem;">
+        {{ question_count }} / 30
+      </div>
+    </div>
+  </div>
+
+  <!-- 1. EVENT CONTROL HUB (Section 26) -->
+  <section id="controls" class="card" style="margin-bottom: 2rem; border-left: 4px solid var(--primary);">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <span class="mono text-primary font-bold" style="font-size: 1.1rem;">⚡ 1. EVENT CONTROLS &amp; TIMER</span>
+      <span class="badge badge-primary mono">SERVER-SIDE</span>
+    </div>
+
+    <p class="text-muted" style="font-size: 0.88rem; margin-bottom: 1.25rem;">
+      Server controls the 70-minute tournament clock. Starting unlocks the debugging arena for all registered teams.
+    </p>
+
+    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+      <button type="button" class="btn btn-primary" onclick="adminEventAction('start')">
+        ▶ START EVENT
+      </button>
+      <button type="button" class="btn btn-outline" onclick="adminEventAction('pause')">
+        ⏸ PAUSE EVENT
+      </button>
+      <button type="button" class="btn btn-outline" onclick="adminEventAction('resume')">
+        ⏯ RESUME EVENT
+      </button>
+      <button type="button" class="btn btn-secondary" onclick="adminEventAction('end')">
+        🏁 END EVENT
+      </button>
+
+      <button type="button" class="btn btn-outline" style="margin-left: auto; border-color: var(--error); color: var(--error);" onclick="openResetModal()">
+        ⚠ RESET EVENT...
+      </button>
+    </div>
+  </section>
+
+  <!-- 2. TEAMS MANAGEMENT (Section 26) -->
+  <section id="teams" class="card" style="margin-bottom: 2rem;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+      <div>
+        <span class="mono text-secondary font-bold" style="font-size: 1.1rem;">👥 2. REGISTERED TEAMS ({{ teams|length }})</span>
+      </div>
+      <div>
+        <input type="text" id="team-search-input" class="form-control" placeholder="Search teams or members..." style="font-size: 0.85rem; padding: 0.35rem 0.75rem; width: 260px;" oninput="filterTeamsTable()">
+      </div>
+    </div>
+
+    <div style="overflow-x: auto;">
+      <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+        <thead>
+          <tr style="background: var(--bg-main); border-bottom: 1px solid var(--border-color); font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted);">
+            <th style="padding: 0.75rem 1rem;">TEAM ID</th>
+            <th style="padding: 0.75rem 1rem;">TEAM NAME</th>
+            <th style="padding: 0.75rem 1rem;">MEMBERS ROSTER</th>
+            <th style="padding: 0.75rem 1rem; text-align: center;">SOLVED</th>
+            <th style="padding: 0.75rem 1rem; text-align: right;">SCORE</th>
+            <th style="padding: 0.75rem 1rem; text-align: center;">STATUS</th>
+            <th style="padding: 0.75rem 1rem; text-align: right;">ACTION</th>
+          </tr>
+        </thead>
+        <tbody id="teams-table-body">
+          {% for t in teams %}
+            <tr style="border-bottom: 1px solid var(--border-color);" class="team-row" data-name="{{ t.name|lower }}" data-members="{{ t.members|lower if t.members else '' }}" data-id="{{ t.id|lower }}">
+              <td style="padding: 0.75rem 1rem;" class="mono text-secondary font-bold">{{ t.id }}</td>
+              <td style="padding: 0.75rem 1rem; font-weight: 600;">{{ t.name }}</td>
+              <td style="padding: 0.75rem 1rem; color: var(--text-muted); font-size: 0.82rem;">{{ t.members if t.members else 'No members listed' }}</td>
+              <td style="padding: 0.75rem 1rem; text-align: center;" class="mono">{{ t.completed_count }}</td>
+              <td style="padding: 0.75rem 1rem; text-align: right;" class="mono text-primary font-bold">{{ t.score }}</td>
+              <td style="padding: 0.75rem 1rem; text-align: center;">
+                <span class="badge {{ 'badge-primary' if t.is_active else 'badge-muted' }} mono" style="font-size: 0.72rem;">
+                  {{ 'ACTIVE' if t.is_active else 'DISABLED' }}
+                </span>
+              </td>
+              <td style="padding: 0.75rem 1rem; text-align: right;">
+                <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="toggleTeamStatus('{{ t.id }}')">
+                  {{ 'Disable' if t.is_active else 'Enable' }}
+                </button>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="7" style="padding: 2rem; text-align: center; color: var(--text-dim); font-family: var(--font-mono);">
+                No teams registered yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 3. SUBMISSIONS STREAM & SCORE OVERRIDES (Section 26, 27) -->
+  <section id="submissions" class="card" style="margin-bottom: 2rem;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <span class="mono text-warning font-bold" style="font-size: 1.1rem;">⚡ 3. SUBMISSIONS &amp; MANUAL SCORING</span>
+      <span class="badge badge-warning mono">OVERRIDE CAPABLE</span>
+    </div>
+
+    <div style="overflow-x: auto;">
+      <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+        <thead>
+          <tr style="background: var(--bg-main); border-bottom: 1px solid var(--border-color); font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted);">
+            <th style="padding: 0.75rem 1rem;">SUB #</th>
+            <th style="padding: 0.75rem 1rem;">TEAM</th>
+            <th style="padding: 0.75rem 1rem;">QUESTION</th>
+            <th style="padding: 0.75rem 1rem;">DIAGNOSIS (LOC &bull; TYPE)</th>
+            <th style="padding: 0.75rem 1rem;">EXPECTED OUTPUT</th>
+            <th style="padding: 0.75rem 1rem; text-align: right;">SCORE</th>
+            <th style="padding: 0.75rem 1rem; text-align: center;">ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in submissions %}
+            <tr style="border-bottom: 1px solid var(--border-color);">
+              <td style="padding: 0.75rem 1rem;" class="mono text-dim">#{{ s.id }}</td>
+              <td style="padding: 0.75rem 1rem;" class="font-bold">{{ s.team_name }}</td>
+              <td style="padding: 0.75rem 1rem;" class="mono text-secondary">{{ s.question_id }}</td>
+              <td style="padding: 0.75rem 1rem; font-size: 0.82rem;">
+                <span class="text-primary font-bold">{{ s.error_location or 'N/A' }}</span> &bull; 
+                <span class="text-muted">{{ s.error_type or 'N/A' }}</span>
+              </td>
+              <td style="padding: 0.75rem 1rem; font-family: var(--font-mono); font-size: 0.82rem; color: var(--text-main);">
+                {{ s.expected_output or 'N/A' }}
+              </td>
+              <td style="padding: 0.75rem 1rem; text-align: right;" class="mono text-primary font-bold">
+                {{ s.total_score }}
+                {% if s.override_reason %}
+                  <span title="Overridden: {{ s.override_reason }}" style="cursor: help;">✏️</span>
+                {% endif %}
+              </td>
+              <td style="padding: 0.75rem 1rem; text-align: center;">
+                <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" 
+                        onclick="openScoreOverrideModal('{{ s.id }}', '{{ s.team_name }}', '{{ s.question_id }}', '{{ s.total_score }}')">
+                  Override Score
+                </button>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="7" style="padding: 2rem; text-align: center; color: var(--text-dim); font-family: var(--font-mono);">
+                No submissions received yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4. DEBUGGING QUESTIONS REPOSITORY (Section 26) -->
+  <section id="questions" class="card" style="margin-bottom: 2rem;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <span class="mono text-primary font-bold" style="font-size: 1.1rem;">❓ 4. DEBUGGING QUESTIONS REPOSITORY ({{ questions|length }})</span>
+      <span class="badge badge-primary mono">30 VERIFIED</span>
+    </div>
+
+    <div style="overflow-x: auto;">
+      <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+        <thead>
+          <tr style="background: var(--bg-main); border-bottom: 1px solid var(--border-color); font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted);">
+            <th style="padding: 0.75rem 1rem;">QID</th>
+            <th style="padding: 0.75rem 1rem;">LANG</th>
+            <th style="padding: 0.75rem 1rem;">TITLE</th>
+            <th style="padding: 0.75rem 1rem;">DIFFICULTY</th>
+            <th style="padding: 0.75rem 1rem;">BUG LOC</th>
+            <th style="padding: 0.75rem 1rem;">ERROR TYPE</th>
+            <th style="padding: 0.75rem 1rem;">EXPECTED OUTPUT</th>
+            <th style="padding: 0.75rem 1rem; text-align: center;">STATUS</th>
+            <th style="padding: 0.75rem 1rem; text-align: right;">ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for q in questions %}
+            <tr style="border-bottom: 1px solid var(--border-color);">
+              <td style="padding: 0.75rem 1rem;" class="mono text-primary font-bold">{{ q.id }}</td>
+              <td style="padding: 0.75rem 1rem;" class="mono text-secondary">{{ q.language }}</td>
+              <td style="padding: 0.75rem 1rem; font-weight: 600;">{{ q.title }}</td>
+              <td style="padding: 0.75rem 1rem;" class="mono text-warning">{{ q.difficulty }}</td>
+              <td style="padding: 0.75rem 1rem;" class="mono text-main">{{ q.bug_location }}</td>
+              <td style="padding: 0.75rem 1rem; color: var(--text-muted);">{{ q.error_type }}</td>
+              <td style="padding: 0.75rem 1rem; font-family: var(--font-mono); font-size: 0.82rem; color: var(--text-main);">{{ q.expected_output }}</td>
+              <td style="padding: 0.75rem 1rem; text-align: center;">
+                <span class="badge {{ 'badge-primary' if q.is_active else 'badge-muted' }} mono" style="font-size: 0.72rem;">
+                  {{ 'ACTIVE' if q.is_active else 'DISABLED' }}
+                </span>
+              </td>
+              <td style="padding: 0.75rem 1rem; text-align: right;">
+                <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="toggleQuestionStatus('{{ q.id }}')">
+                  {{ 'Disable' if q.is_active else 'Enable' }}
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<!-- MODAL: Score Override (Section 27) -->
+<div id="score-override-modal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center;">
+  <div class="card" style="max-width: 480px; width: 90%; border-top: 3px solid var(--warning); padding: 1.5rem;">
+    <h3 class="mono text-warning font-bold" style="font-size: 1.15rem; margin-bottom: 0.75rem;">
+      Override Submission Score
+    </h3>
+    <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1.25rem;">
+      Team: <strong id="modal-team-name" class="text-main"></strong> &bull; Question: <strong id="modal-question-id" class="text-secondary"></strong>
+    </p>
+
+    <input type="hidden" id="modal-sub-id">
+
+    <div class="form-group">
+      <label class="form-label" for="modal-new-score">New Score (0 – 20)</label>
+      <input type="number" id="modal-new-score" class="form-control" step="0.5" min="0" max="40" required>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="modal-reason">Override Reason</label>
+      <input type="text" id="modal-reason" class="form-control" placeholder="e.g. Valid alternative explanation accepted" required>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+      <button type="button" class="btn btn-outline" onclick="closeModal('score-override-modal')">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="submitScoreOverride()">Save Override</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Safe Tournament Reset (Section 28) -->
+<div id="reset-modal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; align-items: center; justify-content: center;">
+  <div class="card" style="max-width: 520px; width: 90%; border-top: 4px solid var(--error); padding: 1.75rem;">
+    <h3 class="mono text-error font-bold" style="font-size: 1.25rem; margin-bottom: 0.5rem;">
+      ⚠ WARNING: TOURNAMENT RESET
+    </h3>
+    <p style="font-size: 0.88rem; color: var(--text-main); line-height: 1.6; margin-bottom: 1rem;">
+      This action will completely erase all registered teams, submissions, assigned questions, power-ups, scores, and reset the tournament timer back to 70 minutes.
+    </p>
+    <div style="background: rgba(255, 77, 77, 0.08); border: 1px dashed var(--error); padding: 0.75rem; border-radius: var(--radius-sm); margin-bottom: 1.25rem; font-family: var(--font-mono); font-size: 0.85rem; color: var(--error);">
+      To proceed, type <strong>RESET EVENT</strong> below:
+    </div>
+
+    <div class="form-group">
+      <input type="text" id="reset-confirmation-input" class="form-control" placeholder="Type 'RESET EVENT' here" autocomplete="off">
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+      <button type="button" class="btn btn-outline" onclick="closeModal('reset-modal')">Cancel</button>
+      <button type="button" class="btn btn-outline" style="border-color: var(--error); color: var(--error);" onclick="confirmEventReset()">
+        CONFIRM RESET
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

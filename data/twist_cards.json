@@ -1,0 +1,74 @@
+[
+  {
+    "id": "TW01",
+    "title": "Freshman Primer",
+    "prompt": "Explain it to a first-year student with zero technical jargon.",
+    "description": "Break down complex concepts into fundamental intuitive metaphors."
+  },
+  {
+    "id": "TW02",
+    "title": "Cricket Pitch Analogy",
+    "prompt": "Explain it using a cricket analogy.",
+    "description": "Map components, roles, and rules to bowlers, batsmen, overs, or fielding strategies."
+  },
+  {
+    "id": "TW03",
+    "title": "Boardroom Elevator Pitch",
+    "prompt": "Explain it to a Fortune 500 CEO in 60 seconds flat.",
+    "description": "Focus strictly on business impact, ROI, efficiency gains, and risk mitigation."
+  },
+  {
+    "id": "TW04",
+    "title": "Zero Jargon Lockdown",
+    "prompt": "Explain it without using ANY technical acronyms or buzzwords.",
+    "description": "Banned words include: Algorithm, Cloud, Framework, Model, Pipeline, Token."
+  },
+  {
+    "id": "TW05",
+    "title": "Real-World Grounding",
+    "prompt": "Explain it using a tangible everyday consumer product.",
+    "description": "Connect the architecture to how an ATM, microwave, traffic light, or delivery app operates."
+  },
+  {
+    "id": "TW06",
+    "title": "The 2031 Vision",
+    "prompt": "Explain why this technology will fundamentally reshape society in the next 5 years.",
+    "description": "Highlight future bottlenecks, geopolitical stakes, and societal impact."
+  },
+  {
+    "id": "TW07",
+    "title": "Bedtime Fable",
+    "prompt": "Explain the concept using a fictional story with characters and conflict.",
+    "description": "Turn components into characters solving a crisis in an imaginary world."
+  },
+  {
+    "id": "TW08",
+    "title": "Security Devil's Advocate",
+    "prompt": "Explain this technology by describing how a malicious actor would try to exploit it.",
+    "description": "Highlight the defense mechanisms by detailing attack vectors and mitigations."
+  },
+  {
+    "id": "TW09",
+    "title": "School Kid Curiosity",
+    "prompt": "Explain it as if answering a persistent 10-year-old child asking 'Why?'.",
+    "description": "Anticipate basic questions with simple, vivid, concrete physical examples."
+  },
+  {
+    "id": "TW10",
+    "title": "The Failure Autopsy",
+    "prompt": "Explain the technology through the lens of a catastrophic system failure.",
+    "description": "Illustrate why the technology was invented by describing what breaks without it."
+  },
+  {
+    "id": "TW11",
+    "title": "Restaurant Kitchen Metaphor",
+    "prompt": "Explain the architecture as a busy restaurant kitchen operation.",
+    "description": "Map servers, queues, databases, and workers to chefs, orders, pantries, and runners."
+  },
+  {
+    "id": "TW12",
+    "title": "Mythbusters Breakdown",
+    "prompt": "Bust 2 widespread myths about this technology and reveal the ground reality.",
+    "description": "Separate media hype from engineering reality."
+  }
+]

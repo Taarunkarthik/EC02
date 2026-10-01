@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}Debug Arena — 3 Straight Challenges (1.5 Min / Code){% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1350px; padding: 1.5rem;">
+  
+  <!-- Arena Status Bar Header -->
+  <div class="card" style="margin-bottom: 1.5rem; padding: 1rem 1.5rem; background: #0E131A; border: 1px solid var(--border-color);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <span class="mono text-primary font-bold" style="font-size: 1.1rem;">DEBUG ARENA</span>
+        <span class="badge badge-secondary mono">TEAM: {{ team.name }} ({{ team.id }})</span>
+        <span class="badge badge-muted mono" style="font-size: 0.75rem;">3 MEMBERS</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 1.5rem;">
+        <div class="mono" style="font-size: 1.1rem;">
+          SCORE: <span id="team-total-score-display" class="text-primary font-bold" style="font-size: 1.3rem;">{{ score.debug_score | round(1) }}</span> PTS
+        </div>
+        <!-- 1.5 Minute Per-Code Timer -->
+        <div class="timer-box {{ 'critical' if remaining_seconds <= 20 and not is_locked else '' }}" id="question-timer-box">
+          <span style="font-size: 0.85rem; color: var(--text-muted);">CODE TIMER:</span>
+          <span id="question-timer" style="font-size: 1.4rem; font-weight: 700;">{{ formatted_question_time }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 Straight Questions Progress Bar -->
+  <div class="card" style="margin-bottom: 1.5rem; padding: 0.75rem 1.25rem; background: #0A0E14;">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+      <div class="mono text-muted" style="font-size: 0.85rem;">CHALLENGE PROGRESSION:</div>
+      <div style="display: flex; gap: 0.75rem;">
+        {% for q in assigned_questions %}
+          {% set is_active = (current_question and current_question.id == q.id) %}
+          <a href="?order={{ q.question_order }}" class="btn {{ 'btn-primary' if is_active else ('btn-secondary' if q.is_completed else 'btn-outline') }}" 
+             style="padding: 0.4rem 0.85rem; font-size: 0.8rem; font-family: var(--font-mono);">
+            <span>
+              {% if q.is_completed %}
+                ✓ CODE 0{{ q.question_order }} (SOLVED)
+              {% elif q.is_locked %}
+                ⏹ CODE 0{{ q.question_order }} (LOCKED)
+              {% elif is_active %}
+                ● CODE 0{{ q.question_order }} (ACTIVE)
+              {% else %}
+                CODE 0{{ q.question_order }}
+              {% endif %}
+            </span>
+          </a>
+        {% endfor %}
+      </div>
+      <div class="mono text-secondary" style="font-size: 0.8rem;">
+        1.5 MIN (90S) PER CODE
+      </div>
+    </div>
+  </div>
+
+  <!-- Arena Workspace: Code Viewer & Answer Form -->
+  <div style="display: grid; grid-template-columns: 1fr; gap: 1.5rem;">
+    {% if current_question %}
+      <!-- Power-Ups Row (Inline & Non-Intrusive) -->
+      <div class="powerups-bar" style="margin-bottom: 1rem;">
+        <!-- Rubber Duck -->
+        <div class="powerup-card {{ 'used' if powerups.RUBBER_DUCK.is_used else '' }}" style="padding: 0.75rem;">
+          <div>
+            <div style="font-size: 1.2rem;">🦆 RUBBER DUCK</div>
+            <div class="powerup-desc">Reveal hint (-10% points)</div>
+          </div>
+          <button id="btn-rubber-duck" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.3rem;" 
+                  data-question-id="{{ current_question.id }}" {{ 'disabled' if (powerups.RUBBER_DUCK.is_used or is_locked) else '' }}>
+            {{ 'USED' if powerups.RUBBER_DUCK.is_used else 'HINT' }}
+          </button>
+        </div>
+
+        <!-- Git Revert -->
+        <div class="powerup-card {{ 'used' if powerups.GIT_REVERT.is_used else '' }}" style="padding: 0.75rem;">
+          <div>
+            <div style="font-size: 1.2rem;">⏪ GIT REVERT</div>
+            <div class="powerup-desc">Swap this code for equivalent</div>
+          </div>
+          <button id="btn-git-revert" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.3rem;"
+                  data-question-id="{{ current_question.id }}" {{ 'disabled' if (powerups.GIT_REVERT.is_used or is_locked) else '' }}>
+            {{ 'USED' if powerups.GIT_REVERT.is_used else 'SWAP CODE' }}
+          </button>
+        </div>
+
+        <!-- Double Commit -->
+        <div class="powerup-card {{ 'used' if powerups.DOUBLE_COMMIT.is_used else ('' if not powerups.DOUBLE_COMMIT.is_armed else 'armed') }}" style="padding: 0.75rem;">
+          <div>
+            <div style="font-size: 1.2rem;">⚡ DOUBLE COMMIT</div>
+            <div class="powerup-desc">2x if accurate, 0 if wrong</div>
+          </div>
+          <button id="btn-double-commit" class="btn btn-outline" style="font-size: 0.75rem; padding: 0.3rem;"
+                  data-question-id="{{ current_question.id }}" {{ 'disabled' if (powerups.DOUBLE_COMMIT.is_used or is_locked) else '' }}>
+            {{ 'USED' if powerups.DOUBLE_COMMIT.is_used else ('⚡ ARMED' if powerups.DOUBLE_COMMIT.is_armed else 'ARM 2X') }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Rubber Duck Hint Box -->
+      <div id="rubber-duck-hint-box" class="card" style="display: {{ 'block' if (powerups.RUBBER_DUCK.is_used and powerups.RUBBER_DUCK.target_question_id == current_question.id) else 'none' }}; margin-bottom: 1rem; border-color: var(--warning); background: rgba(255, 176, 32, 0.05); padding: 0.85rem 1.25rem;">
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+          <span style="font-size: 1.25rem;">🦆</span>
+          <div>
+            <span class="mono text-warning font-bold" style="font-size: 0.85rem;">HINT:</span>
+            <span id="rubber-duck-hint-text" style="color: var(--text-main); font-size: 0.9rem; margin-left: 0.5rem;">
+              {{ current_question.hint }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Read-Only Anti-Copy Code Viewer -->
+      <div class="code-viewer-container" style="margin-bottom: 1rem;">
+        <div class="code-viewer-header">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div class="window-dots">
+              <span class="window-dot dot-red"></span>
+              <span class="window-dot dot-yellow"></span>
+              <span class="window-dot dot-green"></span>
+            </div>
+            <span class="mono">CHALLENGE {{ current_order }} OF 3 &bull; {{ current_question.title }}</span>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <span class="badge badge-secondary">{{ current_question.language }}</span>
+            <span class="badge badge-primary">{{ current_question.base_points }} PTS</span>
+            <span class="badge badge-muted">LEVEL {{ current_question.level }}</span>
+          </div>
+        </div>
+
+        <div class="code-viewer-body" id="code-viewer-screen" oncontextmenu="return false;">
+          {% for line in current_question.code.split('\n') %}
+            <div class="code-line">
+              <span class="code-line-number">{{ loop.index }}</span>
+              <span class="code-line-content">{{ line }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Submission Status & Clean Locked State -->
+      {% if is_locked or (current_assignment and current_assignment.is_completed) %}
+        <div class="card" style="border-color: var(--primary); background: #0A0E14; padding: 1.5rem; text-align: center; margin-bottom: 1rem;">
+          <div class="mono text-primary font-bold" style="font-size: 1.2rem; margin-bottom: 0.5rem;">
+            {% if current_assignment and current_assignment.is_completed %}
+              ✓ FIX COMMITTED FOR CODE 0{{ current_order }}
+            {% else %}
+              ⏹ 1.5 MINUTE TIME EXPIRED — CODE 0{{ current_order }} LOCKED
+            {% endif %}
+          </div>
+          <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1.25rem;">
+            This challenge is locked and cannot be edited. Proceed directly to the next stage:
+          </p>
+
+          <div style="display: flex; justify-content: center; gap: 1rem;">
+            {% if current_order < 3 %}
+              <a href="?order={{ current_order + 1 }}" class="btn btn-primary" style="font-size: 1rem; padding: 0.75rem 2rem;">
+                [ PROCEED TO CODE 0{{ current_order + 1 }} &rarr; ]
+              </a>
+            {% else %}
+              <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center;">
+                <a href="/score" class="btn btn-primary" style="font-size: 1rem; padding: 0.75rem 1.75rem;">
+                  [ ALL CODES COMPLETED — VIEW SCORE &rarr; ]
+                </a>
+                <a href="/leaderboard" class="btn btn-secondary" style="font-size: 1rem; padding: 0.75rem 1.75rem;">
+                  [ LEADERSHIP BOARD &rarr; ]
+                </a>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Debugging Answer Form (Disabled completely if locked, no cursor pointed in) -->
+      <div class="card" id="answer-form-card" style="{{ 'opacity: 0.5; pointer-events: none;' if is_locked else '' }}">
+        <div class="card-header">
+          <span class="mono text-primary font-bold">&gt; DEBUG COMMIT SPECIFICATION</span>
+          <span class="mono text-muted" style="font-size: 0.8rem;">1.5 MINUTE ALLOTTED WINDOW</span>
+        </div>
+
+        <form id="debug-form" data-question-id="{{ current_question.id }}">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="error_location">Error Location</label>
+              <input type="text" id="error_location" class="form-control" placeholder="e.g. Line 4 or loop condition" required autocomplete="off" {{ 'disabled' if is_locked else '' }} style="{{ 'cursor: not-allowed;' if is_locked else '' }}">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="error_type">Error Type</label>
+              <select id="error_type" class="form-control" required {{ 'disabled' if is_locked else '' }} style="{{ 'cursor: not-allowed;' if is_locked else '' }}">
+                <option value="" disabled selected>-- Select Detected Bug Type --</option>
+                <option value="Syntax Error">Syntax Error</option>
+                <option value="Logical Error">Logical Error</option>
+                <option value="Runtime Error">Runtime Error</option>
+                <option value="Edge Case">Edge Case</option>
+                <option value="Algorithmic Error">Algorithmic Error</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="expected_output">Expected Output</label>
+            <input type="text" id="expected_output" class="form-control" placeholder="Exact expected console / return value" required autocomplete="off" {{ 'disabled' if is_locked else '' }} style="{{ 'cursor: not-allowed;' if is_locked else '' }}">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="cause">Cause of Error</label>
+            <textarea id="cause" class="form-control" placeholder="Explain precisely why the defect occurs..." required {{ 'disabled' if is_locked else '' }} style="{{ 'cursor: not-allowed;' if is_locked else '' }}"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="correction">Correction</label>
+            <textarea id="correction" class="form-control" placeholder="Provide the exact modification to resolve the bug..." required {{ 'disabled' if is_locked else '' }} style="{{ 'cursor: not-allowed;' if is_locked else '' }}"></textarea>
+          </div>
+
+          {% if not is_locked %}
+            <button type="submit" id="btn-commit-fix" class="btn btn-primary" style="width: 100%; font-size: 1.05rem; padding: 0.85rem;">
+              [ COMMIT FIX BEFORE TIMER EXPIRES ]
+            </button>
+          {% endif %}
+        </form>
+
+        <!-- Inline Evaluation Feedback Card (Replaces intrusive modal) -->
+        <div id="inline-result-card" style="display: none; margin-top: 1.5rem; padding: 1.25rem; background: #0E131A; border: 1px solid var(--primary); border-radius: var(--radius-sm);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <span class="mono text-primary font-bold">SCORE RECORDED</span>
+            <span id="inline-score-total" class="mono text-primary font-bold" style="font-size: 1.2rem;">--</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+            <div>Type: <span id="inline-score-type" class="text-main">--</span></div>
+            <div>Location: <span id="inline-score-loc" class="text-main">--</span></div>
+            <div>Cause: <span id="inline-score-cause" class="text-main">--</span></div>
+            <div>Output: <span id="inline-score-output" class="text-main">--</span></div>
+            <div>Correction: <span id="inline-score-corr" class="text-main">--</span></div>
+          </div>
+          <div style="display: flex; justify-content: flex-end;">
+            {% if current_order < 3 %}
+              <a href="?order={{ current_order + 1 }}" class="btn btn-primary" style="padding: 0.5rem 1.5rem;">
+                Proceed to Code 0{{ current_order + 1 }} &rarr;
+              </a>
+            {% else %}
+              <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <a href="/score" class="btn btn-primary" style="padding: 0.5rem 1.5rem;">
+                  View Team Score &rarr;
+                </a>
+                <a href="/leaderboard" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">
+                  Leadership Board &rarr;
+                </a>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+
+    {% else %}
+      <div class="card" style="text-align: center; padding: 3rem;">
+        <h3 class="mono text-muted">All 3 Code Challenges Completed!</h3>
+        <p class="text-dim" style="margin-top: 0.5rem; margin-bottom: 1.5rem;">You have solved or completed all 3 allocated challenges for your team.</p>
+        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+          <a href="/score" class="btn btn-primary" style="padding: 0.75rem 2rem;">VIEW MY SCORE BREAKDOWN &rarr;</a>
+          <a href="/leaderboard" class="btn btn-secondary" style="padding: 0.75rem 2rem;">LEADERSHIP BOARD &rarr;</a>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/debug.js') }}"></script>
+<script>
+  // 1.5-minute (90-second) Per-Code Countdown Timer
+  let remainingSecs = {{ remaining_seconds }};
+  const isLocked = {{ 'true' if is_locked else 'false' }};
+  const timerDisplay = document.getElementById('question-timer');
+  const timerBox = document.getElementById('question-timer-box');
+
+  function renderTimer(seconds) {
+    if (!timerDisplay) return;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    timerDisplay.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    if (seconds <= 20 && seconds > 0) {
+      timerBox?.classList.add('critical');
+    } else {
+      timerBox?.classList.remove('critical');
+    }
+  }
+
+  renderTimer(remainingSecs);
+
+  if (!isLocked && remainingSecs > 0) {
+    const targetEndTime = Date.now() + (remainingSecs * 1000);
+    const interval = setInterval(() => {
+      const msLeft = targetEndTime - Date.now();
+      const secsLeft = Math.max(0, Math.ceil(msLeft / 1000));
+      renderTimer(secsLeft);
+
+      if (secsLeft <= 0) {
+        clearInterval(interval);
+        // Time expired! Lock inputs cleanly
+        handleTimeExpired();
+      }
+    }, 500);
+  }
+
+  function handleTimeExpired() {
+    showToast('1.5 Minutes Expired! This code challenge is now locked.', 'error');
+    const formCard = document.getElementById('answer-form-card');
+    if (formCard) {
+      formCard.style.opacity = '0.5';
+      formCard.style.pointerEvents = 'none';
+      formCard.querySelectorAll('input, select, textarea, button').forEach(el => {
+        el.disabled = true;
+        el.style.cursor = 'not-allowed';
+      });
+    }
+    setTimeout(() => window.location.reload(), 1200);
+  }
+</script>
+{% endblock %}

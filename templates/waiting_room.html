@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Waiting Room — EXIT CODE 0{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 680px; margin-top: 3rem;">
+  <div class="card" style="text-align: center; padding: 2.5rem 2rem; border-top: 4px solid var(--primary);">
+    <div style="margin-bottom: 1.5rem;">
+      <span class="badge badge-primary mono" style="font-size: 0.9rem;">CONNECTED &#10003;</span>
+    </div>
+
+    <h2 class="mono" style="font-size: 1.8rem; margin-bottom: 0.5rem;">
+      WELCOME, TEAM <span class="text-primary">{{ team.name }}</span>
+    </h2>
+
+    <div style="font-family: var(--font-mono); font-size: 1.25rem; color: var(--secondary); margin-bottom: 2rem;">
+      TEAM ID: <span style="font-weight: 700; border-bottom: 2px dashed var(--secondary); padding-bottom: 2px;">{{ team.id }}</span>
+    </div>
+
+    <div class="card" style="background: #090D12; border: 1px dashed var(--border-color); margin-bottom: 2rem; padding: 1.25rem;">
+      <div class="mono text-muted" style="font-size: 0.85rem; margin-bottom: 0.5rem;">EVENT STATUS:</div>
+      <div id="waiting-room-status" class="mono text-warning font-bold" style="font-size: 1.2rem; letter-spacing: 0.05em;">
+        WAITING FOR ADMIN TO START
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">
+        Keep this window open. When the admin initiates Session 1, you will enter the Arena with 3 straight challenges (1.5 minutes per code).
+      </div>
+    </div>
+
+    <!-- Active Roster of 3 Members -->
+    <div style="display: flex; justify-content: space-around; text-align: left; background: var(--bg-card-hover); padding: 1.25rem; border-radius: var(--radius-sm); margin-bottom: 2rem;">
+      <div>
+        <div class="text-muted mono" style="font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.4rem;">Team Roster (3 Members)</div>
+        <div class="mono" style="font-size: 0.9rem; margin-bottom: 0.2rem;">1. {{ team.member1 }} (Lead)</div>
+        <div class="mono" style="font-size: 0.9rem; margin-bottom: 0.2rem;">2. {{ team.member2 }}</div>
+        <div class="mono" style="font-size: 0.9rem;">3. {{ team.member3 }}</div>
+      </div>
+      <div style="text-align: right;">
+        <div class="text-muted mono" style="font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.4rem;">Connected Teams</div>
+        <div class="mono text-primary font-bold" style="font-size: 1.4rem;">
+          <span id="connected-teams-count">{{ connected_teams }}</span> TEAMS
+        </div>
+      </div>
+    </div>
+
+    <div class="text-muted mono" style="font-size: 0.8rem;">
+      &gt; Real-time synchronization active &bull; Awaiting signal from IEEE Control Room...
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Championship Result // EXIT CODE 0{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 850px; margin: 2rem auto;">
+  
+  <!-- Team Receipt Card (Section 29) -->
+  <div class="card animate-fade-in" style="border-top: 4px solid var(--primary); padding: 2rem; box-shadow: var(--shadow-card); text-align: center; margin-bottom: 2rem;">
+    <div style="margin-bottom: 1.25rem;">
+      <span class="badge badge-primary mono" style="font-size: 0.8rem; padding: 0.35rem 0.85rem;">
+        IEEE COMPUTER SOCIETY &bull; AMRITA BENGALURU
+      </span>
+    </div>
+
+    <h1 style="font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.4rem;">EXIT CODE 0</h1>
+    <div class="mono text-muted" style="font-size: 0.95rem; margin-bottom: 1.5rem; letter-spacing: 0.05em;">
+      DEBUGGING CHALLENGE COMPLETE
+    </div>
+
+    {% if team %}
+      <div style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1.5rem; max-width: 520px; margin: 0 auto 1.75rem; text-align: left; font-family: var(--font-mono);">
+        <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-dim);">
+          <span>EXECUTION_RECEIPT // TOURNAMENT</span>
+          <span class="text-primary">VERIFIED</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem;">
+          <span class="text-muted">TEAM:</span>
+          <span class="font-bold text-main">{{ team.name }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem;">
+          <span class="text-muted">TEAM ID:</span>
+          <span class="text-secondary font-bold">{{ team.id }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem;">
+          <span class="text-muted">QUESTIONS COMPLETED:</span>
+          <span class="text-warning font-bold">{{ score.completed_count if score else 0 }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; font-size: 1.1rem; border-top: 1px solid var(--border-color); padding-top: 0.6rem;">
+          <span class="text-muted">FINAL SCORE:</span>
+          <span class="text-primary font-bold">{{ score.score if score else 0.0 }}</span>
+        </div>
+
+        <!-- Exit Status 0 Block -->
+        <div style="background: #05070a; border: 1px solid rgba(0, 255, 136, 0.3); border-radius: var(--radius-sm); padding: 1rem; text-align: center; margin-top: 1rem;">
+          <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.35rem;">EXIT STATUS:</div>
+          <div style="font-size: 2.5rem; font-weight: 800; color: var(--primary); text-shadow: 0 0 16px var(--primary-glow); line-height: 1;">
+            0
+          </div>
+          <div style="font-size: 0.8rem; color: var(--primary); margin-top: 0.4rem; font-weight: 600;">
+            ✓ PROCESS COMPLETED
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+        View overall event results below, or <a href="/register" class="text-primary">Sign in</a> to view your team's receipt.
+      </div>
+    {% endif %}
+
+    <div style="display: flex; justify-content: center; gap: 1rem;">
+      <a href="/leaderboard" class="btn btn-primary" style="padding: 0.65rem 1.8rem; font-size: 0.95rem;">
+        VIEW FULL LEADERSHIP BOARD
+      </a>
+      <a href="/" class="btn btn-outline" style="padding: 0.65rem 1.4rem; font-size: 0.95rem;">
+        Tournament Home
+      </a>
+    </div>
+  </div>
+
+  <!-- Winners Podium (Section 30) -->
+  <div class="card" style="border-top: 3px solid var(--warning); padding: 1.75rem; box-shadow: var(--shadow-card);">
+    <div style="text-align: center; margin-bottom: 1.5rem;">
+      <h2 style="font-size: 1.5rem; letter-spacing: -0.01em;">
+        EXIT CODE 0 &bull; <span class="text-warning">WINNERS</span>
+      </h2>
+      <p class="text-muted" style="font-size: 0.85rem; margin-top: 0.25rem;">
+        Top 3 Teams Ranked by Final Score &amp; Qualifying Time
+      </p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1.25rem;">
+      
+      <!-- 1st Place -->
+      <div class="podium-card" style="background: var(--bg-main); border: 2px solid #FFD700; border-radius: var(--radius-sm); padding: 1.25rem; text-align: center;">
+        <div style="font-size: 2.2rem; margin-bottom: 0.35rem;">🥇</div>
+        <div class="mono font-bold" style="color: #FFD700; font-size: 0.85rem; text-transform: uppercase;">1st Place Winner</div>
+        <div style="font-size: 1.2rem; font-weight: 700; margin: 0.5rem 0 0.25rem; color: var(--text-main);">
+          {{ winners[0].name if winners|length > 0 else 'TBD' }}
+        </div>
+        <div class="mono" style="font-size: 0.85rem; color: var(--text-muted);">
+          Score: <strong class="text-primary">{{ winners[0].total_score if winners|length > 0 else 0 }}</strong>
+        </div>
+      </div>
+
+      <!-- 2nd Place -->
+      <div class="podium-card" style="background: var(--bg-main); border: 2px solid #C0C0C0; border-radius: var(--radius-sm); padding: 1.25rem; text-align: center;">
+        <div style="font-size: 2.2rem; margin-bottom: 0.35rem;">🥈</div>
+        <div class="mono font-bold" style="color: #C0C0C0; font-size: 0.85rem; text-transform: uppercase;">2nd Place Winner</div>
+        <div style="font-size: 1.2rem; font-weight: 700; margin: 0.5rem 0 0.25rem; color: var(--text-main);">
+          {{ winners[1].name if winners|length > 1 else 'TBD' }}
+        </div>
+        <div class="mono" style="font-size: 0.85rem; color: var(--text-muted);">
+          Score: <strong class="text-secondary">{{ winners[1].total_score if winners|length > 1 else 0 }}</strong>
+        </div>
+      </div>
+
+      <!-- 3rd Place -->
+      <div class="podium-card" style="background: var(--bg-main); border: 2px solid #CD7F32; border-radius: var(--radius-sm); padding: 1.25rem; text-align: center;">
+        <div style="font-size: 2.2rem; margin-bottom: 0.35rem;">🥉</div>
+        <div class="mono font-bold" style="color: #CD7F32; font-size: 0.85rem; text-transform: uppercase;">3rd Place Winner</div>
+        <div style="font-size: 1.2rem; font-weight: 700; margin: 0.5rem 0 0.25rem; color: var(--text-main);">
+          {{ winners[2].name if winners|length > 2 else 'TBD' }}
+        </div>
+        <div class="mono" style="font-size: 0.85rem; color: var(--text-muted);">
+          Score: <strong class="text-warning">{{ winners[2].total_score if winners|length > 2 else 0 }}</strong>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

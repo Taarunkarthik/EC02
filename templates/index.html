@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}EXIT CODE 0 — IEEE Computer Society Debugging Championship{% endblock %}
+
+{% block content %}
+{% set status = event_state.event_status if event_state else 'WAITING' %}
+<section class="hero" id="home">
+  <div>
+    <span class="hero-badge"><span class="pulse-dot"></span> IEEE WEEK 2026 &bull; TECHNICAL EVENT</span>
+    <h1 class="hero-title">EXIT CODE <span class="zero">0</span></h1>
+    <p class="hero-tagline"><span>Find the Bug.</span><span>Fix the Code.</span><span>Exit Clean.</span></p>
+    <p class="hero-copy">A competitive debugging challenge from the IEEE Computer Society. Teams read broken programs, locate the fault, predict the correct output and commit the fix &mdash; scored live by the server.</p>
+    <div class="hero-cta">
+      <a href="{{ '/arena' if session.get('team_id') else '/register' }}" class="btn btn-primary btn-lg">ENTER THE ARENA</a>
+      <a href="/leaderboard" class="btn btn-outline btn-lg">VIEW LEADERBOARD</a>
+    </div>
+
+    <div class="event-facts" id="event">
+      <div class="fact"><b>07 OCT 2026</b><span>DATE</span></div>
+      <div class="fact"><b>2:50 PM – 4:00 PM</b><span>WINDOW</span></div>
+      <div class="fact"><b>70 MINUTES</b><span>DURATION</span></div>
+      <div class="fact"><b>TEAMS OF 2–3</b><span>FORMAT</span></div>
+    </div>
+
+    <div class="status-chip" role="status">
+      SYSTEM STATUS
+      <b><span class="dot {{ 'dot-warn' if status == 'WAITING' else ('dot-idle' if status == 'COMPLETED' else '') }}"></span>
+        {{ 'READY' if status == 'WAITING' else status }}</b>
+      <span>&bull; Registered teams: <b id="connected-teams-count">{{ connected_teams }}</b></span>
+    </div>
+  </div>
+
+  <!-- Simulated debugger: purely illustrative -->
+  <div class="ide" aria-hidden="true">
+    <div class="ide-bar"><span class="ide-tab">average.py</span><span style="margin-left:auto">PYTHON</span></div>
+    <div class="ide-body" id="ide-body"></div>
+    <div class="ide-console" id="ide-console"></div>
+  </div>
+</section>
+
+<section class="section reveal" id="how">
+  <div class="section-head"><span class="eyebrow">How it works</span><h2>Analyse. Debug. Fix. Exit 0.</h2></div>
+  <div class="steps">
+    <div class="step"><span class="no">01</span><h3>ANALYSE</h3><p>Read the source.</p></div>
+    <div class="step"><span class="no">02</span><h3>DEBUG</h3><p>Locate the problem.</p></div>
+    <div class="step"><span class="no">03</span><h3>FIX</h3><p>Determine the correction.</p></div>
+    <div class="step"><span class="no">04</span><h3>EXIT 0</h3><p>Commit your answer.</p></div>
+  </div>
+</section>
+
+<section class="section reveal" id="format">
+  <div class="section-head"><span class="eyebrow">Event format</span><h2>One round. Clear stages.</h2></div>
+  <div class="flow">
+    <div class="card flow-item"><span class="idx">STAGE 1</span><h3>Debugging Round</h3><p>70 minutes, server-timed.</p></div>
+    <div class="card flow-item"><span class="idx">STAGE 2</span><h3>Result Verification</h3><p>Organisers review submissions.</p></div>
+    <div class="card flow-item sep"><span class="idx">WHILE YOU WAIT</span><h3>Rapid Fire Quiz</h3><p>Just for fun.</p></div>
+    <div class="card flow-item"><span class="idx">STAGE 3</span><h3>Winner Reveal</h3><p>Final ranking published.</p></div>
+  </div>
+  <p class="note">The rapid-fire quiz is for engagement only and does <b>not</b> affect debugging scores or the final ranking.</p>
+</section>
+
+<section class="section reveal">
+  <div class="section-head"><span class="eyebrow">What you will debug</span><h2>Six kinds of broken.</h2></div>
+  <div class="cats">
+    <div class="card card-hover cat"><h3>Syntax errors</h3><p>Code that will not compile or parse.</p><code>if (x == 1</code></div>
+    <div class="card card-hover cat"><h3>Logical errors</h3><p>Runs fine, answers wrong.</p><code>total / (n - 1)</code></div>
+    <div class="card card-hover cat"><h3>Runtime errors</h3><p>Crashes while executing.</p><code>arr[len(arr)]</code></div>
+    <div class="card card-hover cat"><h3>Edge cases</h3><p>Fails on empty, zero or max.</p><code>nums = []</code></div>
+    <div class="card card-hover cat"><h3>Algorithmic mistakes</h3><p>Right idea, wrong procedure.</p><code>mid = (lo + hi) / 2</code></div>
+    <div class="card card-hover cat"><h3>Output prediction</h3><p>State what the fixed program prints.</p><code>EXIT CODE: 0</code></div>
+  </div>
+</section>
+
+<section class="section reveal">
+  <div class="section-head"><span class="eyebrow">Live competition</span><h2>Watch the board move.</h2><p>Scores and ranks update as the server records submissions. The preview below uses sample teams.</p></div>
+  <div class="card" style="overflow:hidden">
+    <div class="card-header"><span class="mono" style="font-size:.8rem">LIVE LEADERBOARD</span><span class="badge badge-muted">SAMPLE DATA</span></div>
+    <table class="data-table"><tbody id="lb-demo"></tbody></table>
+  </div>
+</section>
+
+<section class="cta-band reveal">
+  <h2>READY TO DEBUG?</h2>
+  <a href="{{ '/arena' if session.get('team_id') else '/register' }}" class="btn btn-primary btn-lg">ENTER THE ARENA</a>
+</section>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/landing.js') }}"></script>{% endblock %}

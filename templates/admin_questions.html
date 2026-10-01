@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Debugging Questions & Answers — Admin Console{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1400px; margin-top: 1.5rem;">
+  
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h2 class="mono text-primary font-bold" style="font-size: 1.8rem;">
+        &gt; DEBUGGING QUESTIONS &amp; ANSWER KEYS
+      </h2>
+      <div class="text-muted mono" style="font-size: 0.85rem;">
+        Verified Challenges &bull; Complete Reference Source Code &bull; Bug Locations &bull; Root Causes &bull; Fixes
+      </div>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+      <a href="/admin/debuggings" class="btn btn-outline">&larr; Back to Debuggings Console</a>
+    </div>
+  </div>
+
+  <!-- Search & Level Filter Tabs -->
+  <div class="card" style="margin-bottom: 1.5rem; padding: 1rem 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+        <a href="?level=all" class="btn {{ 'btn-primary' if not selected_level or selected_level == 'all' else 'btn-outline' }}" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">ALL (30)</a>
+        <a href="?level=1" class="btn {{ 'btn-primary' if selected_level == '1' else 'btn-outline' }}" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">L1: SYNTAX (8)</a>
+        <a href="?level=2" class="btn {{ 'btn-primary' if selected_level == '2' else 'btn-outline' }}" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">L2: LOGIC (8)</a>
+        <a href="?level=3" class="btn {{ 'btn-primary' if selected_level == '3' else 'btn-outline' }}" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">L3: RUNTIME (8)</a>
+        <a href="?level=4" class="btn {{ 'btn-primary' if selected_level == '4' else 'btn-outline' }}" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">L4: BOSS (6)</a>
+      </div>
+
+      <div style="flex: 1; max-width: 300px;">
+        <input type="text" id="question-search-input" class="form-control" placeholder="Search title, language, bug..." style="font-size: 0.85rem; padding: 0.4rem 0.75rem;" onkeyup="filterQuestions()">
+      </div>
+    </div>
+  </div>
+
+  <!-- Question List with Complete Answers -->
+  <div id="questions-container" style="display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 3rem;">
+    {% for q in questions %}
+      <div class="card question-card" data-title="{{ q.title|lower }}" data-lang="{{ q.language|lower }}" data-err="{{ q.error_type|lower }}" style="border-left: 4px solid {{ 'var(--error)' if q.level == 4 else ('var(--warning)' if q.level == 3 else ('var(--secondary)' if q.level == 2 else 'var(--primary)')) }};">
+        <div class="card-header" style="margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <span class="mono font-bold" style="font-size: 1.15rem; color: var(--text-main);">{{ q.id }}: {{ q.title }}</span>
+            <span class="badge badge-secondary">{{ q.language }}</span>
+            <span class="badge badge-primary">{{ q.base_points }} PTS</span>
+            <span class="badge badge-muted">LEVEL {{ q.level }} ({{ q.difficulty }})</span>
+          </div>
+
+          <form method="POST" action="/admin/question/toggle" style="display:inline;">
+            <input type="hidden" name="question_id" value="{{ q.id }}">
+            <button type="submit" class="btn {{ 'btn-danger' if q.is_active else 'btn-primary' }}" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;">
+              {{ 'Deactivate' if q.is_active else 'Activate' }}
+            </button>
+          </form>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;" class="grid-2">
+          <!-- Left: Code snippet -->
+          <div>
+            <div class="mono text-muted" style="font-size: 0.75rem; margin-bottom: 0.4rem; font-weight: 600;">
+              &lt;/&gt; CHALLENGE SOURCE CODE:
+            </div>
+            <div style="background: #06090D; padding: 1rem; border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.85rem; overflow-x: auto; color: #D1D5DB; white-space: pre-wrap; line-height: 1.5; border: 1px solid var(--border-color);">
+{{ q.code }}
+            </div>
+          </div>
+
+          <!-- Right: Verified Answer Key Details -->
+          <div>
+            <div class="mono text-primary" style="font-size: 0.75rem; margin-bottom: 0.4rem; font-weight: 600;">
+              ✓ VERIFIED REFERENCE ANSWER KEY:
+            </div>
+            <div style="background: rgba(0, 0, 0, 0.4); padding: 1rem 1.25rem; border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.7; display: flex; flex-direction: column; gap: 0.5rem; border: 1px solid var(--border-color);">
+              <div>
+                <span class="text-muted">Error Type:</span> 
+                <span class="text-warning font-bold" style="margin-left: 0.5rem;">{{ q.error_type }}</span>
+              </div>
+              <div>
+                <span class="text-muted">Bug Location:</span> 
+                <span class="text-secondary font-bold" style="margin-left: 0.5rem;">{{ q.bug_location }}</span>
+              </div>
+              <div>
+                <span class="text-muted">Expected Output:</span> 
+                <span class="text-primary font-bold" style="margin-left: 0.5rem;">{{ q.expected_output }}</span>
+              </div>
+              <div style="border-top: 1px solid var(--border-color); padding-top: 0.5rem;">
+                <span class="text-muted">Root Cause:</span>
+                <div class="text-main" style="margin-top: 0.2rem; font-size: 0.85rem;">{{ q.cause }}</div>
+              </div>
+              <div style="border-top: 1px solid var(--border-color); padding-top: 0.5rem;">
+                <span class="text-muted">Verified Correction:</span>
+                <div class="text-main font-bold" style="margin-top: 0.2rem; color: var(--primary);">{{ q.correction }}</div>
+              </div>
+              {% if q.hint %}
+                <div style="border-top: 1px solid var(--border-color); padding-top: 0.5rem;">
+                  <span class="text-muted">Rubber Duck Hint:</span>
+                  <div class="text-warning" style="margin-top: 0.2rem;">{{ q.hint }}</div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function filterQuestions() {
+    const filter = document.getElementById('question-search-input').value.toLowerCase();
+    const cards = document.querySelectorAll('.question-card');
+    cards.forEach(card => {
+      const title = card.getAttribute('data-title') || '';
+      const lang = card.getAttribute('data-lang') || '';
+      const err = card.getAttribute('data-err') || '';
+      if (title.includes(filter) || lang.includes(filter) || err.includes(filter)) {
+        card.style.display = 'block';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Live Leaderboard — EXIT CODE 0{% endblock %}
+
+{% block content %}
+<div class="lb">
+  <div class="lb-head">
+    <div>
+      <div class="eyebrow">Ranked by score &rarr; questions completed &rarr; earliest submission</div>
+      <h1>LIVE LEADERBOARD <span class="live-tag live" id="lb-tag"><span class="pulse-dot"></span><span id="lb-tag-text">LIVE</span></span></h1>
+    </div>
+    <div class="timebox"><div class="eyebrow">Time remaining</div><div class="t" id="lb-timer-countdown">{{ event_state.formatted_time }}</div></div>
+  </div>
+
+  <div class="podium" id="podium" hidden></div>
+
+  <div class="card" style="overflow:hidden">
+    <div class="card-header"><span class="mono" style="font-size:.78rem" id="lb-count">Standings</span>
+      <button type="button" class="btn btn-outline btn-sm" id="lb-refresh">Refresh</button></div>
+    <div class="table-container">
+      <table class="data-table">
+        <thead><tr><th style="width:90px">Rank</th><th>Team</th><th style="text-align:center">Completed</th><th style="text-align:right">Score</th><th style="text-align:center;width:130px">Status</th></tr></thead>
+        <tbody id="leaderboard-table-body">
+          {% for i in range(5) %}<tr><td colspan="5"><div class="skeleton" style="height:1.1rem"></div></td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/leaderboard.js') }}"></script>{% endblock %}

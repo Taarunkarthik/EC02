@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Team Account & Arena Login — EXIT CODE 0{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 620px; margin-top: 3rem;">
+  <div class="card" style="border-top: 4px solid var(--primary);">
+    <div class="card-header">
+      <span class="mono text-primary font-bold">&gt; PARTICIPANT ARENA GATEWAY</span>
+      <span class="badge badge-primary mono">3 MEMBERS / TEAM</span>
+    </div>
+
+    <!-- Tab navigation -->
+    <div style="display: flex; gap: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1.5rem; padding-bottom: 0.5rem;">
+      <button id="tab-reg-btn" class="btn btn-outline" style="border: none; padding: 0.4rem 0.8rem; border-bottom: 2px solid var(--primary); color: var(--primary);" onclick="switchTab('register')">
+        Create Team Account
+      </button>
+      <button id="tab-login-btn" class="btn btn-outline" style="border: none; padding: 0.4rem 0.8rem; color: var(--text-muted);" onclick="switchTab('login')">
+        Team Sign In
+      </button>
+    </div>
+
+    {% if error %}
+      <div class="badge badge-error" style="width: 100%; padding: 0.75rem; margin-bottom: 1.25rem; border-radius: var(--radius-sm); font-size: 0.9rem; text-align: left;">
+        ⚠ {{ error }}
+      </div>
+    {% endif %}
+
+    <!-- Register Form: Account with password & 3 Members -->
+    <div id="register-tab-content">
+      <form method="POST" action="/register">
+        <div class="form-group">
+          <label class="form-label" for="name">Team Name</label>
+          <input type="text" id="name" name="name" class="form-control" required placeholder="e.g. ByteForce, NullPointers" autofocus autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Account Password</label>
+          <input type="password" id="password" name="password" class="form-control" required placeholder="Create a secure team password" autocomplete="new-password">
+          <span class="text-dim mono" style="font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+            Each team has its own private account. Only your team can view your submissions and score.
+          </span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.25rem;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="member1">Member 1 (Team Lead)</label>
+            <input type="text" id="member1" name="member1" class="form-control" required placeholder="Full Name of Member 1">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="member2">Member 2</label>
+            <input type="text" id="member2" name="member2" class="form-control" required placeholder="Full Name of Member 2">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="member3">Member 3</label>
+            <input type="text" id="member3" name="member3" class="form-control" required placeholder="Full Name of Member 3">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="email">Contact Email / Phone</label>
+          <input type="text" id="email" name="email" class="form-control" required placeholder="teamcontact@amrita.edu">
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; font-size: 1rem; padding: 0.85rem;">
+          CREATE TEAM ACCOUNT &bull; ENTER ARENA
+        </button>
+      </form>
+    </div>
+
+    <!-- Login Form -->
+    <div id="login-tab-content" style="display: none;">
+      <form method="POST" action="/login">
+        <div class="form-group">
+          <label class="form-label" for="team_lookup">Team ID or Registered Team Name</label>
+          <input type="text" id="team_lookup" name="team_lookup" class="form-control" required placeholder="e.g. EX0-001 or ByteForce" autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="login_password">Account Password</label>
+          <input type="password" id="login_password" name="password" class="form-control" placeholder="Enter team password" autocomplete="current-password">
+        </div>
+
+        <button type="submit" class="btn btn-secondary" style="width: 100%; margin-top: 0.5rem; font-size: 1rem; padding: 0.85rem;">
+          SIGN IN TO TEAM ACCOUNT
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function switchTab(tab) {
+    const regTab = document.getElementById('register-tab-content');
+    const logTab = document.getElementById('login-tab-content');
+    const regBtn = document.getElementById('tab-reg-btn');
+    const logBtn = document.getElementById('tab-login-btn');
+
+    if (tab === 'register') {
+      regTab.style.display = 'block';
+      logTab.style.display = 'none';
+      regBtn.style.borderBottom = '2px solid var(--primary)';
+      regBtn.style.color = 'var(--primary)';
+      logBtn.style.borderBottom = 'none';
+      logBtn.style.color = 'var(--text-muted)';
+    } else {
+      regTab.style.display = 'none';
+      logTab.style.display = 'block';
+      logBtn.style.borderBottom = '2px solid var(--secondary)';
+      logBtn.style.color = 'var(--secondary)';
+      regBtn.style.borderBottom = 'none';
+      regBtn.style.color = 'var(--text-muted)';
+    }
+  }
+</script>
+{% endblock %}

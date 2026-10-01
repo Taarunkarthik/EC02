@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Judge Scoring & Finalists — Admin Console{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1350px; margin-top: 1.5rem;">
+  
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h2 class="mono text-primary font-bold">&gt; TECH TALK JUDGE SCORING CONSOLE</h2>
+      <div class="text-muted mono" style="font-size: 0.85rem;">Table Talk &bull; Main Stage &bull; Audience Tally</div>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+      <a href="/admin/dashboard" class="btn btn-outline">&larr; Back to Console</a>
+    </div>
+  </div>
+
+  <!-- Score Entry Form for Volunteer Judges / Admin -->
+  <div class="card" style="margin-bottom: 2rem; border-color: var(--secondary);">
+    <div class="card-header">
+      <span class="mono text-secondary font-bold">&gt; ENTER PRESENTATION SCORE (MAX 50 PTS)</span>
+      <span class="badge badge-secondary">5 RUBRICS &times; 10 PTS</span>
+    </div>
+
+    <form method="POST" action="/admin/score/submit-presentation">
+      <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;" class="grid-3">
+        <div class="form-group">
+          <label class="form-label" for="team_id">Target Team</label>
+          <select id="team_id" name="team_id" class="form-control" required>
+            <option value="" disabled selected>-- Select Team to Score --</option>
+            {% for t in teams %}
+              <option value="{{ t.id }}">{{ t.name }} ({{ t.id }}) - Table {{ t.table_number or 1 }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="stage">Presentation Stage</label>
+          <select id="stage" name="stage" class="form-control" required>
+            <option value="TABLE_TALK" selected>Table Talk (Round 1)</option>
+            <option value="MAIN_STAGE">Main Stage (Round 2)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="bonus_score">Bonus Points (+)</label>
+          <input type="number" step="0.5" id="bonus_score" name="bonus_score" value="0" class="form-control">
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+        <div class="form-group">
+          <label class="form-label" for="tech_understanding">Tech Depth (10)</label>
+          <input type="number" min="0" max="10" step="0.5" id="tech_understanding" name="tech_understanding" value="8" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="accuracy">Accuracy (10)</label>
+          <input type="number" min="0" max="10" step="0.5" id="accuracy" name="accuracy" value="8" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="clarity">Clarity (10)</label>
+          <input type="number" min="0" max="10" step="0.5" id="clarity" name="clarity" value="8" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="communication">Comm &amp; Twist (10)</label>
+          <input type="number" min="0" max="10" step="0.5" id="communication" name="communication" value="8" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="presentation">Delivery (10)</label>
+          <input type="number" min="0" max="10" step="0.5" id="presentation" name="presentation" value="8" class="form-control" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="judge_notes">Judge Evaluator Feedback / Notes</label>
+        <input type="text" id="judge_notes" name="judge_notes" placeholder="Outstanding delivery of the cricket analogy and clean technical explanation..." class="form-control">
+      </div>
+
+      <button type="submit" class="btn btn-secondary" style="width: 100%;">
+        SUBMIT OFFICIAL SCORE (SCALE TO 100% IN COMPOSITE RATING)
+      </button>
+    </form>
+  </div>
+
+  <!-- Finalists & Table Champions Selection -->
+  <div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+      <span class="mono text-primary font-bold">&gt; DESIGNATE MAIN STAGE FINALISTS (TOP 4)</span>
+      <span class="badge badge-primary">AUDIENCE VOTING ELIGIBLE</span>
+    </div>
+
+    <form method="POST" action="/admin/score/set-finalists">
+      <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1rem;">
+        Check the 4 teams that won their respective tables to qualify them for Main Stage presentations and unlock them on the public Audience Voting ballot:
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        {% for t in teams %}
+          <label class="card" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem; cursor: pointer; background: #0B0F15;">
+            <input type="checkbox" name="finalist_ids" value="{{ t.id }}" {{ 'checked' if t.is_finalist else '' }} style="width: 1.2rem; height: 1.2rem; accent-color: var(--primary);">
+            <div>
+              <div class="mono font-bold" style="font-size: 0.95rem;">{{ t.name }}</div>
+              <div class="text-muted" style="font-size: 0.75rem;">Table {{ t.table_number or 1 }} | Pres: {{ t.tech_talk_score | round(1) }}</div>
+            </div>
+          </label>
+        {% endfor %}
+      </div>
+
+      <button type="submit" class="btn btn-primary">
+        CONFIRM &amp; PUBLISH FINALISTS TO BALLOT
+      </button>
+    </form>
+  </div>
+
+  <!-- Live Audience Voting Tally -->
+  <div class="card">
+    <div class="card-header">
+      <span class="mono text-warning font-bold">&gt; AUDIENCE PEOPLE'S CHOICE TALLY</span>
+      <span class="badge badge-warning">LIVE VOTES</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+      {% if vote_tallies and vote_tallies|length > 0 %}
+        {% for vt in vote_tallies %}
+          <div style="background: var(--bg-card-hover); padding: 1rem; border-radius: var(--radius-sm); border-left: 3px solid var(--warning);">
+            <div class="mono font-bold" style="font-size: 1.1rem;">{{ vt.team_name }}</div>
+            <div class="text-warning mono font-bold" style="font-size: 1.5rem; margin-top: 0.25rem;">{{ vt.vote_count }} VOTES</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="text-muted" style="padding: 1.5rem; text-align: center;">No audience votes registered yet.</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

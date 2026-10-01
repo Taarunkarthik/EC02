@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Submissions Review & Overrides — Admin Console{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1400px; margin-top: 1.5rem;">
+  
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <div>
+      <h2 class="mono text-primary font-bold">&gt; AUDIT SUBMISSIONS STREAM</h2>
+      <div class="text-muted mono" style="font-size: 0.85rem;">{{ submissions|length }} Total Submissions Logged</div>
+    </div>
+    <a href="/admin/dashboard" class="btn btn-outline">&larr; Back to Console</a>
+  </div>
+
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>TEAM</th>
+            <th>QUESTION</th>
+            <th>PARTICIPANT SUBMISSION</th>
+            <th>BREAKDOWN</th>
+            <th>AWARDED</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if submissions and submissions|length > 0 %}
+            {% for s in submissions %}
+              <tr>
+                <td class="mono">#{{ s.id }}</td>
+                <td>
+                  <div class="mono font-bold">{{ s.team_name }}</div>
+                  <div class="text-muted" style="font-size: 0.75rem;">{{ s.team_id }}</div>
+                </td>
+                <td>
+                  <span class="badge badge-secondary mono">{{ s.question_id }}</span>
+                </td>
+                <td style="font-size: 0.8rem; max-width: 360px;">
+                  <div><strong>Loc:</strong> {{ s.error_location }} | <strong>Type:</strong> {{ s.error_type }}</div>
+                  <div><strong>Out:</strong> {{ s.expected_output }}</div>
+                  <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 0.2rem;">
+                    <strong>Cause:</strong> {{ s.cause[:60] }}...
+                  </div>
+                </td>
+                <td class="mono" style="font-size: 0.75rem;">
+                  Type: {{ s.error_type_score }} | Loc: {{ s.error_loc_score }}<br>
+                  Cause: {{ s.cause_score }} | Out: {{ s.output_score }}<br>
+                  Fix: {{ s.correction_score }}
+                </td>
+                <td class="mono text-primary font-bold" style="font-size: 1.1rem;">
+                  {{ s.total_score }} pts
+                </td>
+                <td>
+                  <form method="POST" action="/admin/submission/override" style="display: flex; gap: 0.35rem; align-items: center;">
+                    <input type="hidden" name="submission_id" value="{{ s.id }}">
+                    <input type="number" step="0.5" name="new_score" value="{{ s.total_score }}" style="width: 60px; padding: 0.25rem; font-family: var(--font-mono); background: #000; border: 1px solid var(--border-color); color: #fff; font-size: 0.8rem;">
+                    <button type="submit" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Set</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="text-muted" style="text-align: center; padding: 2rem;">No submissions received yet.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

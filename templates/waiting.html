@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Waiting Room — EXIT CODE 0{% endblock %}
+
+{% block content %}
+{% set tname = team.name if team else session.get('team_name') %}
+{% set tid = team.id if team else session.get('team_id') %}
+
+{% if just_registered %}
+<div class="gate" id="init-overlay" role="dialog" aria-modal="true" aria-labelledby="init-title">
+  <div class="card box success-panel">
+    <div class="check-ring">✓</div>
+    <div class="eyebrow">Registration complete</div>
+    <h1 id="init-title" style="font-size:1.5rem;margin:.4rem 0">TEAM INITIALIZED</h1>
+    <div class="eyebrow">Team ID</div>
+    <div class="team-id">{{ tid }}</div>
+    <p class="text-dim" style="font-size:.82rem;margin:-.6rem 0 1.2rem">Keep this ID &mdash; you can use it to sign back in.</p>
+    <button class="btn btn-primary btn-lg btn-block" id="init-close">ENTER WAITING ROOM</button>
+  </div>
+</div>
+{% endif %}
+
+<div class="lobby">
+  <div class="status-orb" aria-hidden="true"><i></i></div>
+  <div class="eyebrow">Event status &mdash; <span id="lobby-status" class="text-warning">WAITING FOR ADMIN</span></div>
+  <h1 style="margin:.6rem 0 .3rem">WELCOME, TEAM <span class="text-primary">{{ tname }}</span></h1>
+  <div class="mono text-dim">{{ tid }}</div>
+
+  <div class="lobby-grid">
+    <div class="card stat"><div class="k">TEAM MEMBERS</div><div class="v">{{ members|length }}</div></div>
+    <div class="card stat"><div class="k">REGISTERED TEAMS</div><div class="v" id="teams-registered-count">{{ teams_count }}</div></div>
+    <div class="card stat"><div class="k">DURATION</div><div class="v">{{ event_state.duration_minutes if event_state and event_state.duration_minutes else 70 }} MIN</div></div>
+    <div class="card stat"><div class="k">FORMAT</div><div class="v">DEBUG</div></div>
+  </div>
+
+  {% if members %}
+  <div style="display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:1.6rem">
+    {% for m in members %}<span class="badge">{{ m.name }}</span>{% endfor %}
+  </div>
+  {% endif %}
+
+  <p class="text-muted">Waiting for competition to begin<span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
+  <p class="text-dim" style="font-size:.85rem;margin:.4rem 0 1.6rem">Stay on this page. The arena opens automatically when the admin starts the event.</p>
+  <div style="display:flex;gap:.6rem;justify-content:center">
+    <a href="/arena" class="btn btn-secondary" id="enter-arena-btn">Check Arena Status</a>
+    <a href="/logout" class="btn btn-outline">Logout</a>
+  </div>
+</div>
+
+<div class="countdown-overlay hidden" id="countdown" role="alert">
+  <div class="eyebrow">EVENT STARTED</div>
+  <div class="text-secondary" style="font-weight:600">Preparing Debug Arena...</div>
+  <div class="big" id="count-num">3</div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/waiting.js') }}"></script>{% endblock %}

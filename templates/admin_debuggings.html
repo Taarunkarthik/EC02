@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Debuggings Operations Console — Admin Console{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1400px; margin-top: 1.5rem;">
+  
+  <!-- Header Bar -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h2 class="mono text-primary font-bold" style="font-size: 1.8rem;">
+        &gt; DEBUGGING OPERATIONS CONSOLE
+      </h2>
+      <div class="text-muted mono" style="font-size: 0.85rem;">
+        All tournament operational controls &bull; Live telemetry &bull; Teams management &bull; Submissions &bull; Overrides
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+      <a href="/admin/export/teams.csv" class="btn btn-outline" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+        📥 Export Teams
+      </a>
+      <a href="/admin/export/results.csv" class="btn btn-outline" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+        📥 Export Results
+      </a>
+      <a href="/admin/questions" class="btn btn-primary" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+        ❓ Questions &amp; Answers
+      </a>
+    </div>
+  </div>
+
+  <!-- Telemetry Overview Cards -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+    <div class="card">
+      <div class="text-muted mono" style="font-size: 0.8rem;">TOURNAMENT STATUS</div>
+      <div class="mono text-primary font-bold" style="font-size: 1.5rem; margin-top: 0.35rem;">
+        <span class="pulse-dot"></span> {{ event_state.current_state }}
+      </div>
+    </div>
+    <div class="card">
+      <div class="text-muted mono" style="font-size: 0.8rem;">REGISTERED TEAMS</div>
+      <div class="mono text-main font-bold" style="font-size: 1.5rem; margin-top: 0.35rem;">
+        {{ team_count }} TEAMS
+      </div>
+    </div>
+    <div class="card">
+      <div class="text-muted mono" style="font-size: 0.8rem;">TOTAL SUBMISSIONS</div>
+      <div class="mono text-secondary font-bold" style="font-size: 1.5rem; margin-top: 0.35rem;">
+        {{ submission_count }} SUBMISSIONS
+      </div>
+    </div>
+    <div class="card">
+      <div class="text-muted mono" style="font-size: 0.8rem;">ROUND TIMER</div>
+      <div class="mono text-warning font-bold" style="font-size: 1.5rem; margin-top: 0.35rem;">
+        {{ event_state.formatted_time }}
+      </div>
+    </div>
+  </div>
+
+  <!-- 1. TOURNAMENT LIFECYCLE CONTROLS -->
+  <div class="card" style="margin-bottom: 2rem; border-left: 4px solid var(--primary);">
+    <div class="card-header">
+      <span class="mono text-primary font-bold">&gt; 1. DEBUGGING ARENA CONTROLS</span>
+      <span class="badge badge-primary mono">LIFECYCLE</span>
+    </div>
+
+    <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1.25rem;">
+      Manage the live debugging round. Starting the round enables all teams to open challenges and run their 1.5-minute timers.
+    </p>
+
+    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+      <button id="btn-start-round" class="btn btn-primary" onclick="triggerEventAction('start')">
+        ▶ START DEBUGGING ROUND
+      </button>
+      <button id="btn-pause-round" class="btn btn-outline" onclick="triggerEventAction('pause')">
+        ⏸ PAUSE ROUND
+      </button>
+      <button id="btn-resume-round" class="btn btn-outline" onclick="triggerEventAction('resume')">
+        ⏯ RESUME ROUND
+      </button>
+      <button id="btn-end-round" class="btn btn-secondary" onclick="triggerEventAction('end_event')">
+        🏁 CONCLUDE TOURNAMENT
+      </button>
+      <button class="btn btn-danger" onclick="openModal('reset-modal')" style="margin-left: auto;">
+        ⚠ RESET EVENT DATA
+      </button>
+    </div>
+  </div>
+
+  <!-- 2. TEAMS MANAGEMENT & STATUS -->
+  <div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+      <span class="mono text-secondary font-bold">&gt; 2. REGISTERED TEAMS ({{ teams|length }})</span>
+      <span class="badge badge-secondary mono">ACCOUNTS &amp; MONITORING</span>
+    </div>
+
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>TEAM ID</th>
+            <th>TEAM NAME</th>
+            <th>3 MEMBERS</th>
+            <th>CONTACT</th>
+            <th>SOLVED</th>
+            <th>SCORE</th>
+            <th>STATUS</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in teams %}
+            <tr>
+              <td class="mono font-bold">{{ t.id }}</td>
+              <td class="font-bold text-main">{{ t.name }}</td>
+              <td class="text-muted" style="font-size: 0.8rem;">{{ t.member1 }} (Lead), {{ t.member2 }}, {{ t.member3 }}</td>
+              <td class="mono text-muted" style="font-size: 0.8rem;">{{ t.email or 'N/A' }}</td>
+              <td class="mono font-bold text-warning">{{ t.solved_count }} / 3</td>
+              <td class="mono font-bold text-primary">{{ t.final_score | round(1) }} pts</td>
+              <td>
+                <span class="badge {{ 'badge-primary' if t.is_active else 'badge-danger' }} mono">
+                  {{ 'ACTIVE' if t.is_active else 'DISABLED' }}
+                </span>
+              </td>
+              <td>
+                <form method="POST" action="/admin/team/toggle-status" style="display:inline;">
+                  <input type="hidden" name="team_id" value="{{ t.id }}">
+                  <button type="submit" class="btn {{ 'btn-danger' if t.is_active else 'btn-primary' }}" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+                    {{ 'Disable' if t.is_active else 'Enable' }}
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="8" class="text-muted" style="text-align: center; padding: 2rem;">
+                No teams registered yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 3. LIVE SUBMISSIONS STREAM & SCORE OVERRIDE -->
+  <div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+      <span class="mono text-warning font-bold">&gt; 3. SUBMISSIONS FEED &amp; MANUAL OVERRIDES ({{ submissions|length }})</span>
+      <span class="badge badge-warning mono">LIVE EVALUATION</span>
+    </div>
+
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>TEAM</th>
+            <th>CHALLENGE</th>
+            <th>SCORE EARNED</th>
+            <th>SUBMITTED CONTENT</th>
+            <th>OVERRIDE SCORE</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in submissions %}
+            <tr>
+              <td class="mono">#{{ s.id }}</td>
+              <td>
+                <span class="font-bold text-main">{{ s.team_name }}</span>
+                <div class="mono text-dim" style="font-size: 0.75rem;">{{ s.team_id }}</div>
+              </td>
+              <td>
+                <span class="text-secondary font-bold">{{ s.question_title }}</span>
+                <div class="mono text-dim" style="font-size: 0.75rem;">{{ s.question_id }}</div>
+              </td>
+              <td class="mono font-bold text-primary" style="font-size: 1.1rem;">
+                {{ s.total_score | round(1) }} pts
+                {% if s.is_double_commit %}
+                  <span class="badge badge-warning" style="font-size: 0.65rem;">2X</span>
+                {% endif %}
+              </td>
+              <td style="font-family: var(--font-mono); font-size: 0.75rem; max-width: 320px;">
+                <div><span class="text-muted">Loc:</span> {{ s.error_location or 'N/A' }} &bull; <span class="text-muted">Type:</span> {{ s.error_type or 'N/A' }}</div>
+                <div><span class="text-muted">Output:</span> {{ s.expected_output or 'N/A' }}</div>
+                <div style="color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Fix: {{ s.correction or 'N/A' }}</div>
+              </td>
+              <td>
+                <form method="POST" action="/admin/submission/override" style="display: flex; gap: 0.4rem; align-items: center;">
+                  <input type="hidden" name="submission_id" value="{{ s.id }}">
+                  <input type="number" step="0.5" name="new_score" value="{{ s.total_score }}" class="form-control" style="width: 80px; padding: 0.25rem 0.5rem; font-size: 0.8rem;" required>
+                  <button type="submit" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">Set</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6" class="text-muted" style="text-align: center; padding: 2rem;">
+                No submissions received yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Reset Confirmation Modal -->
+<div id="reset-modal" class="modal-backdrop">
+  <div class="modal-dialog" style="border-color: var(--error);">
+    <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+      <span class="mono text-error font-bold" style="font-size: 1.2rem;">CRITICAL: RESET EVENT DATA</span>
+    </div>
+
+    <div style="margin-bottom: 1.5rem;">
+      <p style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 1rem;">
+        This operation will <strong>permanently purge</strong> all registered teams, submissions, question timers, and scores.
+      </p>
+      <p class="text-muted mono" style="font-size: 0.85rem; margin-bottom: 1rem;">
+        Questions repository will be safely preserved.
+      </p>
+      <div class="form-group">
+        <label class="form-label text-error" for="reset-confirmation-input">Type 'RESET' to confirm wipe:</label>
+        <input type="text" id="reset-confirmation-input" class="form-control" placeholder="RESET" autocomplete="off">
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button class="btn btn-outline" onclick="closeModal('reset-modal')">CANCEL</button>
+      <button id="btn-confirm-reset" class="btn btn-danger" onclick="confirmResetEvent()">RESET ALL DATA</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function openModal(id) {
+    document.getElementById(id).classList.add('active');
+  }
+
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+  }
+
+  async function triggerEventAction(action) {
+    const actionNames = {
+      start: 'Start Debugging Round',
+      pause: 'Pause Round',
+      resume: 'Resume Round',
+      end_event: 'Conclude Tournament'
+    };
+    if (!confirm(`Are you sure you want to: ${actionNames[action] || action}?`)) return;
+
+    try {
+      const res = await fetch('/api/admin/event-action', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ action: action })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'info');
+        setTimeout(() => window.location.reload(), 800);
+      } else {
+        showToast(data.error || 'Operation failed', 'error');
+      }
+    } catch (e) {
+      showToast('Network error triggering operation', 'error');
+    }
+  }
+
+  async function confirmResetEvent() {
+    const input = document.getElementById('reset-confirmation-input').value.trim();
+    if (input !== 'RESET') {
+      showToast("Confirmation string must be 'RESET' exactly.", 'error');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/reset-event', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ confirmation: input })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'info');
+        closeModal('reset-modal');
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        showToast(data.error || 'Reset failed', 'error');
+      }
+    } catch (e) {
+      showToast('Network error during reset', 'error');
+    }
+  }
+</script>
+{% endblock %}

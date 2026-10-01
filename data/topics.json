@@ -1,0 +1,122 @@
+[
+  {
+    "id": "T01",
+    "topic": "AI Agents & Autonomous Reasoning",
+    "short_description": "Systems that combine LLMs with tool execution, planning loops, and memory to complete multi-step goals.",
+    "difficulty": "Medium"
+  },
+  {
+    "id": "T02",
+    "topic": "Generative AI & Diffusion Models",
+    "short_description": "The math and architectures behind text, image, and audio generation via latent noise reversal.",
+    "difficulty": "Medium"
+  },
+  {
+    "id": "T03",
+    "topic": "Quantum Computing & Quantum Supremacy",
+    "short_description": "Qubits, superposition, and entanglement breaking classical limits for cryptography and simulation.",
+    "difficulty": "Hard"
+  },
+  {
+    "id": "T04",
+    "topic": "Edge AI & On-Device Neural Processing",
+    "short_description": "Running quantised deep learning models directly on low-power IoT chips and mobile devices without cloud dependency.",
+    "difficulty": "Medium"
+  },
+  {
+    "id": "T05",
+    "topic": "Digital Twins in Cyber-Physical Systems",
+    "short_description": "Virtual real-time clones of physical assets simulating degradation, stress, and operational efficiency.",
+    "difficulty": "Medium"
+  },
+  {
+    "id": "T06",
+    "topic": "Zero Trust Architecture & Micro-segmentation",
+    "short_description": "Security paradigms built on 'never trust, always verify', continuous authentication, and least privilege.",
+    "difficulty": "Medium"
+  },
+  {
+    "id": "T07",
+    "topic": "Computer Vision & Spatial Computing",
+    "short_description": "Visual scene perception, 3D Gaussian splatting, and real-time object tracking in spatial environments.",
+    "difficulty": "Hard"
+  },
+  {
+    "id": "T08",
+    "topic": "Federated Learning & Privacy-Preserving AI",
+    "short_description": "Training global machine learning models across decentralized edge nodes without aggregating raw user data.",
+    "difficulty": "Hard"
+  },
+  {
+    "id": "T09",
+    "topic": "Explainable AI (XAI) & Algorithmic Auditing",
+    "short_description": "SHAP, LIME, and attention heatmaps enabling human interpretation of high-stakes black-box AI decisions.",
+    "difficulty": "Medium"
+  },
+  {
+    "id": "T10",
+    "topic": "Blockchain Consensus & Zero-Knowledge Proofs",
+    "short_description": "Cryptographic zk-SNARKs allowing verification of computation and identity without revealing underlying secrets.",
+    "difficulty": "Hard"
+  },
+  {
+    "id": "T11",
+    "topic": "Neuromorphic Computing & Spiking Neural Networks",
+    "short_description": "Hardware and brain-inspired architectures mimicking biological synapses with ultra-low milliwatt power consumption.",
+    "difficulty": "Hard"
+  },
+  {
+    "id": "T12",
+    "topic": "Autonomous Robotics & SLAM",
+    "short_description": "Simultaneous Localization and Mapping enabling self-driving vehicles and quadrupeds to navigate unknown terrain.",
+    "difficulty": "Hard"
+  },
+  {
+    "id": "T13",
+    "topic": "Post-Quantum Cryptography & Lattice Standards",
+    "short_description": "NIST-standardized cryptographic algorithms resilient against Shor's algorithm and quantum decryption threats.",
+    "difficulty": "Hard"
+  },
+  {
+    "id": "T14",
+    "topic": "Confidential Computing & Secure Enclaves",
+    "short_description": "Hardware-level memory encryption (AMD SEV, Intel SGX) safeguarding sensitive data while in active computation.",
+    "difficulty": "Medium"
+  },
+  {
+    "id": "T15",
+    "topic": "Serverless Architectures & MicroVM Sandboxing",
+    "short_description": "Sub-millisecond lightweight virtualization (e.g., Firecracker) powering event-driven edge execution.",
+    "difficulty": "Easy"
+  },
+  {
+    "id": "T16",
+    "topic": "Augmented Reality & Real-Time Occlusion",
+    "short_description": "Depth sensing and neural meshing blending digital holograms convincingly with real-world physical geometry.",
+    "difficulty": "Medium"
+  },
+  {
+    "id": "T17",
+    "topic": "Vector Databases & Semantic Retrieval (RAG)",
+    "short_description": "Indexing high-dimensional embedding spaces (HNSW) to anchor generative models with dynamic enterprise facts.",
+    "difficulty": "Easy"
+  },
+  {
+    "id": "T18",
+    "topic": "Cyber Threat Hunting & Automated Red Teaming",
+    "short_description": "Autonomous security agents simulating adversary tactics, techniques, and procedures (MITRE ATT&CK) in live networks.",
+    "difficulty": "Medium"
+  },
+  {
+    "id": "T19",
+    "topic": "Bioinformatics & Deep Learning in Protein Folding",
+    "short_description": "Transformers and geometric graphs predicting complex 3D macromolecular structures from 1D amino acid strings.",
+    "difficulty": "Hard"
+  },
+  {
+    "id": "T20",
+    "topic": "Software Supply Chain Security & SBOMs",
+    "short_description": "Cryptographic artifact signing, provenance tracking, and dependency transparency preventing supply-chain malware.",
+    "difficulty": "Medium"
+  }
+]

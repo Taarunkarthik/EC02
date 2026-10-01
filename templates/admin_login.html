@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Console Login — EXIT CODE 0{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 480px; margin-top: 4rem;">
+  <div class="card" style="border-color: var(--primary);">
+    <div class="card-header">
+      <span class="mono text-primary font-bold">&gt; ADMIN SECURITY CREDENTIALS</span>
+      <span class="badge badge-primary">AUTHORIZED ONLY</span>
+    </div>
+
+    {% if error %}
+      <div class="badge badge-error" style="width: 100%; padding: 0.75rem; margin-bottom: 1.25rem; font-size: 0.85rem;">
+        ⚠ {{ error }}
+      </div>
+    {% endif %}
+
+    <form method="POST" action="/admin/login">
+      <div class="form-group">
+        <label class="form-label" for="username">Admin Username</label>
+        <input type="text" id="username" name="username" class="form-control" required autofocus autocomplete="off">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="password">Security Key / Password</label>
+        <input type="password" id="password" name="password" class="form-control" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; font-size: 1rem;">
+        AUTHENTICATE SESSION
+      </button>
+    </form>
+
+    <div class="text-dim mono" style="font-size: 0.75rem; text-align: center; margin-top: 1.5rem;">
+      Protected portal &bull; IEEE Computer Society Control Node
+    </div>
+  </div>
+</div>
+{% endblock %}
