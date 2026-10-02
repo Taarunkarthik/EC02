@@ -1,0 +1,53 @@
+// Uses a separate test database. This script resets that test event.
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+if (process.env.EXITCODE_E2E !== '1') throw new Error('Use EXITCODE_E2E=1 only with the isolated test server.');
+const base = process.env.TEST_URL || 'http://127.0.0.1:5056';
+(async () => {
+ const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+ const context = await browser.newContext({viewport:{width:1440,height:900}, reducedMotion:'no-preference'});
+ const page = await context.newPage(); const errors = [];
+ page.on('pageerror', error => errors.push(error.message));
+ page.on('console', message => { if(message.type()==='error') errors.push(message.text()); });
+ const admin = await browser.newContext();
+ try {
+  await admin.request.post(base+'/admin/login',{form:{username:'admin',password:'exitcode0_admin_2026'}});
+  assert.equal((await admin.request.post(base+'/api/admin/reset-event',{data:{confirmation:'RESET EVENT'}})).status(),200);
+  await page.goto(base); await page.waitForFunction(()=>document.documentElement.dataset.reactBits==='ready');
+  const canvas=page.locator('.pattern-waves canvas'); await canvas.waitFor();
+  assert.equal(await canvas.evaluate(el=>!!el.getContext('webgl2')),true);
+  await page.waitForTimeout(2200);const before=await canvas.screenshot();
+  await page.locator('.hero-visual').hover({position:{x:10,y:30}});await page.waitForTimeout(200);const after=await canvas.screenshot();assert.notDeepEqual(before,after);
+  console.log('PASS actual React/OGL WebGL waves render and animate');
+  await page.locator('.editor-demo').hover({position:{x:5,y:40}});
+  assert.ok(Number(await page.locator('.editor-demo .border-glow-card').evaluate(el=>el.style.getPropertyValue('--edge-proximity')))>70);
+  await page.mouse.move(1,1);assert.equal(await page.locator('.editor-demo .border-glow-card').evaluate(el=>el.style.getPropertyValue('--edge-proximity')),'0');
+  console.log('PASS supplied BorderGlow angle/proximity response and leave reset');
+  await page.screenshot({path:path.resolve('artifacts/react-home.png'),fullPage:true});
+  await page.goto(base+'/register');await page.locator('.rubber-segment').waitFor();
+  await page.locator('#login-tab').click();assert.equal(await page.locator('#login-panel').isVisible(),true);
+  await page.locator('#login-tab').press('Home');assert.equal(await page.locator('#register-tab').getAttribute('aria-selected'),'true');
+  await page.locator('#login-tab').evaluate(el=>el.click());assert.equal(await page.locator('#login-panel').isVisible(),true);
+  await page.locator('#login-tab').press('ArrowLeft');
+  const a=await page.locator('#register-tab').boundingBox(),b=await page.locator('#login-tab').boundingBox();
+  await page.waitForTimeout(300);await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:20});await page.mouse.up();
+  assert.equal(await page.locator('#login-tab').getAttribute('aria-selected'),'true');
+  console.log('PASS actual Motion tabs click, drag, keyboard and assistive click');
+  await page.screenshot({path:path.resolve('artifacts/react-register.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:path.resolve('artifacts/react-register-mobile.png'),fullPage:true});
+  await page.emulateMedia({reducedMotion:'reduce'});await page.goto(base);await page.locator('.pattern-waves canvas').waitFor();await page.waitForTimeout(300);
+  const still=await page.locator('.pattern-waves canvas').screenshot();await page.locator('.hero-visual').hover({position:{x:25,y:35}});await page.waitForTimeout(250);assert.deepEqual(await page.locator('.pattern-waves canvas').screenshot(),still);
+  console.log('PASS reduced-motion waves remain static and mobile layout fits');
+  const noGL = await browser.newContext(); await noGL.addInitScript(()=>{const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(kind,...args){return kind.startsWith('webgl')?null:original.call(this,kind,...args);};});const fallback=await noGL.newPage();await fallback.goto(base);await fallback.locator('.pattern-waves[data-fallback=true]').waitFor();await noGL.close();console.log('PASS no-WebGL fallback');
+  await page.request.post(base+'/register',{form:{name:'React Components Check',member1:'One',member2:'Two'}});await admin.request.post(base+'/api/admin/event-action',{data:{action:'start'}});
+  await page.setViewportSize({width:1366,height:768});await page.goto(base+'/arena');await page.locator('#competition-start').click();if(await page.locator('#competition-fallback').isVisible())await page.locator('#competition-fallback').click();
+  await page.locator('#error_location').fill('3');await page.locator('#error_type').selectOption('Logical Error');await page.locator('#expected_output').fill('10');await page.locator('#cause').fill('The loop skips the final number.');await page.locator('#correction').fill('Use range(len(numbers)).');
+  await page.route('**/api/submit-bug-fix',async route=>{await new Promise(resolve=>setTimeout(resolve,800));await route.continue();});
+  await page.locator('#commit-fix-btn').click();await page.locator('.thought-line[data-working]').waitFor();await page.waitForFunction(()=>document.getElementById('submission-trace').dataset.success==='true');
+  assert.equal(await page.locator('.thought-line').count(),1);await page.locator('.thought-line__head').click();await page.waitForFunction(()=>document.querySelector('.thought-line__head').getAttribute('aria-expanded')==='true');
+  assert.match(await page.locator('.thought-line__steps').textContent(),/Server confirmed/);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  await page.screenshot({path:path.resolve('artifacts/react-submission.png'),fullPage:true});console.log('PASS actual ThoughtLine pending, server-confirmed, elapsed and collapsible trace');
+  assert.deepEqual(errors,[]);console.log('PASS no React, WebGL shader or JavaScript errors');
+ } finally {await admin.request.post(base+'/api/admin/reset-event',{data:{confirmation:'RESET EVENT'}});await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

@@ -1,148 +1,64 @@
 {% extends "base.html" %}
-{% block title %}Arena — EXIT CODE 0{% endblock %}
-{% block body_class %}arena-mode{% endblock %}
-{% block header %}{% endblock %}
-
+{% block title %}Debug Arena — EXIT CODE 0{% endblock %}
+{% block body_class %}arena-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/arena.css') }}">{% endblock %}
 {% block content %}
-{% set total = assigned_questions|length %}
-{% set done = score.completed_count if score else 0 %}
-<div class="arena" id="arena"
-     data-team-id="{{ team.id }}"
-     data-current="{{ client_q.id if client_q else '' }}">
-
-  <!-- TOP BAR -->
-  <header class="topbar">
-    <div class="grp">
-      <span class="brand-mini">EXIT CODE <em>0</em></span>
-      <div class="tstat team"><span class="k">TEAM &bull; {{ team.id }}</span><span class="v" title="{{ team.name }}">{{ team.name }}</span></div>
-    </div>
-    <div class="grp">
-      <div class="tstat"><span class="k">SCORE</span><span class="v" id="arena-team-score">{{ (score.score|round(1)) if score else 0 }}</span></div>
-      <div class="tstat"><span class="k">COMPLETED</span><span class="v"><span id="done-count">{{ done }}</span> / {{ total }}</span></div>
-      <div class="timer-box" id="timer-box" title="Server-controlled time remaining">
-        <div class="tstat"><span class="k">TIME</span><span class="v" id="event-timer-display">{{ event_state.formatted_time }}</span></div>
-      </div>
-    </div>
-    <div class="grp">
-      <span class="conn" id="conn-indicator"><span class="dot"></span><span id="conn-text">SERVER ONLINE</span></span>
-      <button type="button" class="fs-pill off" id="fs-pill" title="Toggle fullscreen">FULLSCREEN OFF</button>
-    </div>
+<div id="arena" class="arena-shell" data-team-id="{{ team.id }}" data-generation="{{ event_state.generation|default('') }}">
+  <header class="arena-topbar">
+    <a class="arena-brand" href="{{ url_for('index') }}"><span class="brand-symbol" aria-hidden="true">/0</span><span>EXIT CODE <b>0</b><small>DEBUGGING ARENA</small></span></a>
+    <div class="arena-team"><strong>{{ team.name }}</strong><span class="mono">{{ team.id }} <span class="team-divider">/</span> IEEE WEEK 2026</span></div>
+    <div class="arena-metrics"><div class="arena-metric"><small>SCORE</small><strong id="arena-team-score">{{ score.score|round(1) if score else 0 }}</strong></div><div class="arena-metric"><small>COMPLETED</small><strong><span id="completed-count">{{ score.completed_count if score else 0 }}</span><span class="metric-denominator"> / <span id="question-total">{{ assigned_questions|length }}</span></span></strong></div><div class="arena-metric arena-timer"><small>TIME REMAINING</small><strong id="event-timer-display" data-event-timer>{{ event_state.formatted_time }}</strong></div></div>
+    <button id="fullscreen-toggle" class="btn btn-secondary btn-sm" type="button" aria-label="Enter fullscreen"><span aria-hidden="true">⛶</span> <span data-fullscreen-label>Fullscreen</span></button>
   </header>
-  <div class="progress-bar" aria-hidden="true"><i id="progress-fill" style="width: {{ (done / total * 100) if total else 0 }}%"></i></div>
-
-  <div class="workspace">
-    <!-- QUESTION NAVIGATOR -->
-    <nav class="pane nav-pane" aria-label="Questions">
-      <h3>QUESTIONS</h3>
-      <div class="qgrid" id="qgrid"></div>
-      <div class="legend"><span>✓ submitted</span><span>● current</span><span>○ open</span><span>🔒 locked</span></div>
-    </nav>
-
-    <!-- CODE VIEWER -->
-    <section class="pane code-pane" aria-label="Source code">
-      <div class="editor">
-        <div class="editor-head">
-          <span class="file" id="file-name">—</span>
-          <span class="qmeta"><span class="badge badge-primary" id="lang-badge">—</span><span class="badge" id="diff-badge">—</span><span class="badge badge-success" id="pts-badge">—</span></span>
-        </div>
-        <div class="editor-body" id="code-viewer-container" aria-readonly="true">
-          <div class="empty"><strong>No question available.</strong>Check back when an organiser unlocks one.</div>
-        </div>
-        <div class="editor-foot">
-          <span>READ ONLY</span><span>ANTI-COPY ACTIVE</span><span>SERVER VALIDATED</span>
-          <span class="hint">Click a line number to mark the suspected error line</span>
-        </div>
+  <div class="arena-toolbar"><div class="arena-breadcrumb"><span>competition</span><span>/</span><span>debugging</span><span>/</span><strong id="breadcrumb-question">{{ client_q.id if client_q else 'workspace' }}</strong></div><div class="arena-toolbar-right"><span class="badge badge-primary" data-event-status>{{ event_state.event_status }}</span><span class="connection-status" data-connection><span class="status-dot"></span><span data-connection-label>SERVER ONLINE</span></span><a href="{{ url_for('leaderboard') }}">Leaderboard ↗</a></div></div>
+  <div id="arena-state-notice" class="arena-state-notice" role="status" hidden></div>
+  <div class="arena-workspace">
+    <aside class="question-sidebar" aria-label="Question navigator">
+      <div class="sidebar-heading"><span class="eyebrow">EXPLORER</span><span id="sidebar-question-total" class="mono">{{ assigned_questions|length }}</span></div>
+      <div class="sidebar-label">Debugging challenges</div>
+      <nav id="question-list" class="question-list" aria-label="Challenges">
+      {% for q in assigned_questions %}
+        <button type="button" class="question-item {{ 'current' if current_question and current_question.id == q.id else '' }} {{ 'completed' if q.is_completed else '' }}" data-question="{{ q.id }}" data-order="{{ q.question_order }}" data-completed="{{ q.is_completed }}" title="Question {{ q.question_order }} · {{ q.difficulty }} · {{ q.points }} points" {% if not q.is_unlocked %}disabled{% endif %} {% if current_question and current_question.id == q.id %}aria-current="true"{% endif %}>
+          <span class="question-number">{{ '%02d' % q.question_order }}</span><span class="question-label"><strong>{{ q.language }}</strong><small>{{ q.points }} pts · {{ q.difficulty }}</small></span><span class="question-symbol" aria-label="{{ 'Submitted' if q.is_completed else 'Available' if q.is_unlocked else 'Locked' }}">{{ '✓' if q.is_completed else '●' if current_question and current_question.id == q.id else '○' if q.is_unlocked else '−' }}</span>
+        </button>
+      {% endfor %}
+      </nav>
+      <div class="sidebar-footer"><div class="legend"><span><i class="legend-dot complete"></i>Submitted</span><span><i class="legend-dot review"></i>Review</span></div><progress id="question-progress" max="{{ assigned_questions|length or 1 }}" value="{{ score.completed_count if score else 0 }}" aria-label="Questions completed"></progress><p>One problem. One clean exit.</p></div>
+    </aside>
+    <section class="source-panel" aria-label="Read only problem source">
+      <div class="editor-tabs"><div class="editor-tab"><span class="file-icon" aria-hidden="true">&lt;/&gt;</span><span id="source-filename">{{ {'Python':'main.py','Java':'Main.java','C':'main.c','C++':'main.cpp'}.get(client_q.language, 'source') if client_q else 'source' }}</span><span class="read-only-dot" title="Read only"></span></div><span class="editor-tab-aside">SOURCE</span></div>
+      <div class="problem-heading"><div><div class="eyebrow" id="challenge-number">CHALLENGE {{ '%02d' % current_question.question_order if current_question else '—' }}</div><h1 id="question-title">{{ client_q.title if client_q else 'No question available' }}</h1></div><div class="problem-tags"><span class="badge" id="question-difficulty">{{ client_q.difficulty if client_q else '—' }}</span><span class="badge badge-primary" id="question-points">{{ client_q.points if client_q else 0 }} PTS</span></div></div>
+      <p class="source-instruction">Inspect the source. Select a line number to mark the suspected error.</p>
+      <div id="code-viewer-container" class="code-viewer" tabindex="0" aria-label="Read only source code; select a line number to identify the error">
+      {% if client_q and client_q.code %}{% for line in client_q.code.split('\n') %}<div class="code-line" data-line="{{ loop.index }}"><button class="line-number" type="button" aria-label="Select line {{ loop.index }}">{{ '%02d' % loop.index }}</button><code class="line-content">{{ line }}</code></div>{% endfor %}{% else %}<div class="empty-state"><h3>No question available.</h3><p>Contact an event volunteer to check your assignment.</p></div>{% endif %}
       </div>
+      <div class="editor-status"><span>READ ONLY <span class="status-separator">/</span> ANTI-COPY ACTIVE</span><span id="line-position">Ln —</span><span id="source-language">{{ client_q.language if client_q else '—' }}</span><span>UTF-8</span></div>
+      <section class="tactics-panel" aria-label="Tactical power ups"><div class="tactics-heading"><span class="eyebrow">TACTICAL TOOLS</span><span>One use each · choose carefully</span></div><div class="powerup-list">
+        {% set rd = powerups.get('RUBBER_DUCK') if powerups else None %}{% set gr = powerups.get('GIT_REVERT') if powerups else None %}{% set dc = powerups.get('DOUBLE_COMMIT') if powerups else None %}
+        <button class="powerup" type="button" data-powerup="rubber-duck" {% if rd and rd.is_used %}disabled{% endif %}><span class="powerup-icon" aria-hidden="true">?</span><span><strong>Rubber Duck</strong><small data-powerup-status>{{ 'Used' if rd and rd.is_used else 'Get a hint · −10% base points' }}</small></span></button>
+        <button class="powerup" type="button" data-powerup="git-revert" {% if gr and gr.is_used %}disabled{% endif %}><span class="powerup-icon" aria-hidden="true">↶</span><span><strong>Git Revert</strong><small data-powerup-status>{{ 'Used' if gr and gr.is_used else 'Replace this challenge' }}</small></span></button>
+        <button class="powerup" type="button" data-powerup="double-commit" {% if dc and (dc.is_used or dc.is_armed) %}disabled{% endif %}><span class="powerup-icon" aria-hidden="true">×2</span><span><strong>Double Commit</strong><small data-powerup-status>{{ 'Used' if dc and dc.is_used else 'Armed' if dc and dc.is_armed else 'Double points or zero' }}</small></span></button>
+      </div><div id="rubber-duck-hint-box" class="alert alert-warning" role="status" hidden></div></section>
     </section>
-
-    <!-- RESPONSE PANEL -->
-    <aside class="pane answer-pane" aria-label="Your response">
-      <h2><span id="q-title">Question</span><span class="draft-note" id="draft-note">Saved locally ✓</span></h2>
-
+    <section class="response-panel" aria-labelledby="response-title"><header class="response-heading"><div><span class="eyebrow">YOUR DIAGNOSIS</span><h2 id="response-title">Commit a fix</h2></div><button id="review-toggle" class="btn btn-ghost btn-sm" type="button" aria-pressed="false" title="Mark this question for review">⚑ Review</button></header>
       <form id="bug-fix-form" novalidate>
         <input type="hidden" id="form-question-id" value="{{ client_q.id if client_q else '' }}">
-        <div class="row2">
-          <div class="form-group" style="margin:0">
-            <label class="form-label" for="error_location">Error line</label>
-            <input type="number" min="1" inputmode="numeric" id="error_location" class="form-control mono" placeholder="08" autocomplete="off">
-          </div>
-          <div class="form-group" style="margin:0">
-            <label class="form-label" for="error_type">Type of error</label>
-            <select id="error_type" class="form-control">
-              <option value="">Select type</option>
-              <option>Syntax Error</option><option>Logical Error</option><option>Compilation Error</option>
-              <option>Runtime Error</option><option>Edge Case</option><option>Algorithmic Error</option><option>Other</option>
-            </select>
-          </div>
+        <div class="response-scroll"><div class="response-intro"><span class="status-dot"></span> All five fields contribute to your score.</div>
+          <div class="diagnostic-row"><div class="field"><label for="error_location">01 <span>Error line</span></label><input type="number" id="error_location" name="error_location" min="1" step="1" placeholder="Line no." required autocomplete="off"><small class="field-error" data-error-for="error_location"></small></div><div class="field"><label for="error_type">02 <span>Error type</span></label><select id="error_type" name="error_type" required><option value="">Select type</option><option>Syntax Error</option><option>Logical Error</option><option>Compilation Error</option><option>Runtime Error</option><option>Edge Case</option><option>Algorithmic Error</option><option>Other</option></select><small class="field-error" data-error-for="error_type"></small></div></div>
+          <div class="field"><label for="expected_output">03 <span>Expected output</span><small>20%</small></label><textarea id="expected_output" name="expected_output" class="mono" rows="2" placeholder="What should the program output?" required maxlength="5000" spellcheck="false"></textarea><small class="field-error" data-error-for="expected_output"></small></div>
+          <div class="field"><label for="cause">04 <span>Root cause</span><small>25%</small></label><textarea id="cause" name="cause" rows="2" placeholder="Explain why this bug occurs…" required maxlength="5000"></textarea><small class="field-error" data-error-for="cause"></small></div>
+          <div class="field"><label for="correction">05 <span>Correction / fix</span><small>30%</small></label><textarea id="correction" name="correction" class="mono" rows="3" placeholder="Describe or write the corrected code…" required maxlength="5000" spellcheck="false"></textarea><small class="field-error" data-error-for="correction"></small></div>
+          <div class="commit-trace" id="submission-trace" hidden></div>
+          <div id="form-feedback-alert" class="alert" role="status" hidden></div>
+          <button id="next-question" class="btn btn-secondary" type="button" hidden>Next question →</button>
         </div>
-        <div class="form-group" style="margin-top:.85rem">
-          <label class="form-label" for="expected_output">Expected output</label>
-          <textarea id="expected_output" class="form-control code-input" rows="2" placeholder="What the fixed program prints" spellcheck="false"></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="cause">Root cause</label>
-          <textarea id="cause" class="form-control" rows="2" placeholder="Why does the bug happen?"></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="correction">Correction / fix</label>
-          <textarea id="correction" class="form-control code-input" rows="4" placeholder="The corrected line(s) of code" spellcheck="false"></textarea>
-        </div>
-        <button type="submit" id="commit-fix-btn" class="btn btn-primary btn-block commit-btn">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M1 8h4M11 8h4"/></svg>
-          <span id="commit-label">COMMIT FIX</span>
-        </button>
+        <div class="commit-footer"><div class="draft-status"><span id="draft-status" aria-live="polite">Drafts save on this device</span><span class="mono">SERVER VALIDATED</span></div><button type="submit" id="commit-fix-btn" class="btn btn-primary"><span aria-hidden="true">⑂</span> COMMIT FIX <span aria-hidden="true">→</span></button><p>Partial credit awarded. Your best score is retained.</p></div>
       </form>
-
-      <div id="result-slot" aria-live="polite"></div>
-
-      <div>
-        <div class="eyebrow" style="margin-bottom:.5rem">Power-ups &bull; 1 use each</div>
-        <div class="powerups">
-          {% set rd = powerups.get('RUBBER_DUCK') %}{% set gr = powerups.get('GIT_REVERT') %}{% set dc = powerups.get('DOUBLE_COMMIT') %}
-          <div class="pu"><div><b>RUBBER DUCK</b><small>Hint, −10% on this question</small></div>
-            {% if rd and rd.is_used %}<span class="badge badge-muted">USED</span>{% else %}<button type="button" class="btn btn-outline btn-sm" id="pu-duck">Use</button>{% endif %}</div>
-          <div id="hint-box" class="hint-box hidden"></div>
-          <div class="pu"><div><b>GIT REVERT</b><small>Swap this question</small></div>
-            {% if gr and gr.is_used %}<span class="badge badge-muted">USED</span>{% else %}<button type="button" class="btn btn-outline btn-sm" id="pu-revert">Use</button>{% endif %}</div>
-          <div class="pu"><div><b>DOUBLE COMMIT</b><small>2× if ≥60%, else 0</small></div>
-            {% if dc and dc.is_used %}<span class="badge badge-muted">CONSUMED</span>{% elif dc and dc.is_armed %}<span class="badge badge-primary">ARMED</span>{% else %}<button type="button" class="btn btn-outline btn-sm" id="pu-double">Arm</button>{% endif %}</div>
-        </div>
-      </div>
-    </aside>
+    </section>
   </div>
+  <footer class="arena-statusbar"><span><span class="status-dot"></span> IEEE COMPUTER SOCIETY <span class="status-separator">/</span> AMRITA BENGALURU</span><span>ANALYSE → DEBUG → FIX → EXIT 0</span></footer>
 </div>
-
-<!-- Competition-mode gate (first visit) -->
-<div class="gate hidden" id="gate-start" role="dialog" aria-modal="true" aria-labelledby="gate-title">
-  <div class="card box">
-    <div class="eyebrow">Fair play</div>
-    <h1 id="gate-title" style="font-size:1.5rem;margin:.4rem 0">COMPETITION MODE</h1>
-    <ul>
-      <li>Fullscreen mode is required</li>
-      <li>Copy / paste is restricted</li>
-      <li>Leaving the competition window may be logged</li>
-      <li>Submissions close when time expires</li>
-    </ul>
-    <button class="btn btn-primary btn-lg btn-block" id="gate-go">ENTER FULLSCREEN &amp; START</button>
-    <p class="text-dim" id="gate-note" style="font-size:.74rem;margin-top:.9rem">Activity signals are for organisers only; nobody is disqualified automatically. The timer is controlled by the server and keeps running.</p>
-  </div>
-</div>
-
-<div class="gate hidden" id="gate-exit" role="dialog" aria-modal="true">
-  <div class="card box">
-    <h1 style="font-size:1.4rem;margin-bottom:.5rem">FULLSCREEN MODE EXITED</h1>
-    <p class="text-muted" style="margin-bottom:1.4rem">Return to fullscreen to continue. Your time and progress are unaffected.</p>
-    <button class="btn btn-primary btn-lg btn-block" id="gate-return">RETURN TO FULLSCREEN</button>
-  </div>
-</div>
-
-<!-- Safe navigator data: no answer keys, only what the participant already sees. -->
-<script id="nav-meta" type="application/json">{{ nav_meta|tojson }}</script>
-<script id="first-q" type="application/json">{{ ({'id': client_q.id, 'language': client_q.language, 'title': client_q.title, 'difficulty': client_q.difficulty, 'points': client_q.points, 'code': client_q.code, 'is_completed': current_question.is_completed} if client_q else None)|tojson }}</script>
+<dialog id="competition-dialog" class="modal competition-dialog" aria-labelledby="competition-title"><span class="eyebrow">READY WHEN YOU ARE</span><div class="competition-icon" aria-hidden="true">⛶</div><h2 id="competition-title">Competition mode</h2><p>A focused workspace for a fair competition.</p><ul><li>Fullscreen mode is required where supported.</li><li>Source copying and pasting answers are restricted.</li><li>Leaving the window may be logged for organizer review.</li><li>Submissions close at the server deadline.</li></ul><p class="field-help">The competition clock is already running. Accidental exits do not disqualify your team.</p><button id="competition-start" class="btn btn-primary" type="button">Enter fullscreen & start →</button><button id="competition-fallback" class="btn btn-ghost" type="button" hidden>Continue in this browser</button><p id="fullscreen-help" class="field-help" role="status"></p></dialog>
+<div id="fullscreen-reminder" class="fullscreen-reminder" role="status" hidden><span>Fullscreen mode exited. Your progress is safe.</span><button id="fullscreen-return" class="btn btn-secondary btn-sm" type="button">Return to fullscreen</button><button id="fullscreen-dismiss" class="btn btn-ghost btn-sm" type="button" aria-label="Dismiss fullscreen reminder">×</button></div>
 {% endblock %}
-
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/code-viewer.js') }}"></script>
-<script src="{{ url_for('static', filename='js/arena-guard.js') }}"></script>
-<script src="{{ url_for('static', filename='js/arena.js') }}"></script>
-{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/editor.js') }}" defer></script><script src="{{ url_for('static', filename='js/arena.js') }}" defer></script><script src="{{ url_for('static', filename='js/competition.js') }}" defer></script>{% endblock %}

@@ -1,0 +1,12 @@
+.rubber-segment { position:relative; display:flex; padding:var(--rs-inset); border-radius:var(--rs-radius); background:var(--rs-track); color:var(--rs-ink); isolation:isolate; touch-action:pan-y; user-select:none; width:100%; }
+.rubber-segment__item { display:flex; align-items:center; justify-content:center; gap:8px; height:var(--rs-h); min-width:var(--rs-min); padding:0 var(--rs-pad); color:inherit; background:transparent; border:0; border-radius:calc(var(--rs-radius) - var(--rs-inset)); font:500 var(--rs-font)/1 var(--font-ui); white-space:nowrap; cursor:pointer; }
+.rubber-segment[data-equal] > .rubber-segment__item, .rubber-segment[data-equal] .rubber-segment__copy { flex:1; }
+.rubber-segment__item:focus-visible { outline:2px solid var(--accent-hover); outline-offset:0; }
+.rubber-segment__item[data-pressed] { background:#ffffff08; }
+.rubber-segment__item:disabled { cursor:not-allowed; opacity:.5; }
+.rubber-segment__thumb { position:absolute; inset:var(--rs-inset); display:flex; background:var(--rs-thumb); color:var(--rs-ink-active); pointer-events:none; will-change:clip-path; }
+.rubber-segment__copy { cursor:inherit; }
+.rubber-segment[data-held] { cursor:grabbing; }
+.rubber-segment[data-held] .rubber-segment__item { cursor:grabbing; }
+[data-react-tabs][data-react-mounted=true] { display:block; padding:0; border:1px solid var(--border); border-radius:8px; background:transparent; }
+[data-react-tabs][data-react-mounted=true]:before { display:none; }

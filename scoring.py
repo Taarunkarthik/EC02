@@ -1,6 +1,8 @@
 import re
+import json
+from datetime import datetime, timezone
 from rapidfuzz import fuzz
-from database import get_db_connection, unlock_next_question
+from database import get_db_connection, unlock_next_question, record_activity
 from config import Config
 
 def normalize_text(text):
@@ -119,13 +121,46 @@ def evaluate_submission(question, user_submission, is_double_commit=False, hint_
         "percentage": round((raw_total / base_points) * 100, 1) if base_points > 0 else 0
     }
 
-def process_submission(team_id, question_id, submission_data):
+def _live_error(cur):
+    state = cur.execute("SELECT event_status, is_paused, event_end_time FROM event_state WHERE id = 1").fetchone()
+    if not state or state["event_status"] != "LIVE" or state["is_paused"]:
+        return "The competition is not currently active. Submissions are closed."
+    if state["event_end_time"]:
+        end = datetime.fromisoformat(state["event_end_time"])
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) >= end:
+            return "Time has expired. Submissions are closed."
+    return None
+
+
+def _assignment_allowed(cur, team_id, question_id):
+    return cur.execute("""SELECT 1 FROM question_assignments qa JOIN teams t ON t.id = qa.team_id
+        WHERE qa.team_id = ? AND qa.question_id = ? AND qa.is_unlocked = 1
+        AND qa.is_abandoned = 0 AND t.is_active = 1""", (team_id, question_id)).fetchone() is not None
+
+
+def process_submission(team_id, question_id, submission_data, enforce_live=False):
     """
     Validates, scores, persists submission and updates progression and team score.
     """
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+        if enforce_live:
+            error = _live_error(cur)
+            if error:
+                return None, error
+        request_id = submission_data.get("request_id")
+        if request_id:
+            existing = cur.execute("SELECT question_id, response_json FROM submissions WHERE team_id = ? AND request_id = ?", (team_id, request_id)).fetchone()
+            if existing:
+                if existing["question_id"] != question_id:
+                    return None, "This request has already been used for another question."
+                return json.loads(existing["response_json"]), None
+        if not _assignment_allowed(cur, team_id, question_id):
+            return None, "This question is not unlocked for your team."
         # Check if question exists
         cur.execute("SELECT * FROM questions WHERE id = ?", (question_id,))
         question = cur.fetchone()
@@ -134,7 +169,7 @@ def process_submission(team_id, question_id, submission_data):
 
         # Check question assignment
         cur.execute("""
-            SELECT * FROM question_assignments 
+            SELECT * FROM question_assignments
             WHERE team_id = ? AND question_id = ? AND is_abandoned = 0
         """, (team_id, question_id))
         assignment = cur.fetchone()
@@ -143,7 +178,7 @@ def process_submission(team_id, question_id, submission_data):
 
         # Check if Double Commit is armed
         cur.execute("""
-            SELECT * FROM powerups 
+            SELECT * FROM powerups
             WHERE team_id = ? AND powerup_type = 'DOUBLE_COMMIT' AND is_armed = 1 AND target_question_id = ?
         """, (team_id, question_id))
         double_armed = cur.fetchone()
@@ -151,7 +186,7 @@ def process_submission(team_id, question_id, submission_data):
 
         # Check if Rubber Duck was used
         cur.execute("""
-            SELECT * FROM powerups 
+            SELECT * FROM powerups
             WHERE team_id = ? AND powerup_type = 'RUBBER_DUCK' AND is_used = 1 AND target_question_id = ?
         """, (team_id, question_id))
         duck_used = cur.fetchone()
@@ -159,9 +194,9 @@ def process_submission(team_id, question_id, submission_data):
 
         # Evaluate score
         eval_result = evaluate_submission(
-            dict(question), 
-            submission_data, 
-            is_double_commit=is_double, 
+            dict(question),
+            submission_data,
+            is_double_commit=is_double,
             hint_used=is_hint
         )
 
@@ -170,8 +205,8 @@ def process_submission(team_id, question_id, submission_data):
             INSERT INTO submissions (
                 team_id, question_id, error_location, error_type, expected_output, cause, correction,
                 error_loc_score, error_type_score, cause_score, output_score, correction_score,
-                total_score, is_double_commit, is_accepted, submitted_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                total_score, is_double_commit, is_accepted, submitted_at, request_id, response_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, ?, ?)
         """, (
             team_id, question_id,
             submission_data.get("error_location", ""),
@@ -185,13 +220,14 @@ def process_submission(team_id, question_id, submission_data):
             eval_result["output_score"],
             eval_result["correction_score"],
             eval_result["total_score"],
-            eval_result["is_double_commit"]
+            eval_result["is_double_commit"],
+            request_id, json.dumps(eval_result)
         ))
 
         # Mark question as completed
         cur.execute("""
-            UPDATE question_assignments 
-            SET is_completed = 1 
+            UPDATE question_assignments
+            SET is_completed = 1
             WHERE team_id = ? AND question_id = ?
         """, (team_id, question_id))
 
@@ -201,8 +237,8 @@ def process_submission(team_id, question_id, submission_data):
         # Consume Double Commit if armed
         if is_double:
             cur.execute("""
-                UPDATE powerups 
-                SET is_used = 1, is_armed = 0, used_at = CURRENT_TIMESTAMP 
+                UPDATE powerups
+                SET is_used = 1, is_armed = 0, used_at = CURRENT_TIMESTAMP
                 WHERE team_id = ? AND powerup_type = 'DOUBLE_COMMIT'
             """, (team_id,))
 
@@ -221,24 +257,31 @@ def process_submission(team_id, question_id, submission_data):
         comp_count = stats["comp_count"] or 0
 
         cur.execute("""
-            UPDATE scores 
-            SET score = ?, completed_count = ?, last_submission_time = CURRENT_TIMESTAMP, last_updated = CURRENT_TIMESTAMP 
+            UPDATE scores
+            SET last_submission_time = CASE WHEN ? > score OR ? > completed_count THEN CURRENT_TIMESTAMP ELSE last_submission_time END,
+                score = ?, completed_count = ?, last_updated = CURRENT_TIMESTAMP
             WHERE team_id = ?
-        """, (total_score, comp_count, team_id))
+        """, (total_score, comp_count, total_score, comp_count, team_id))
 
+        record_activity(team_id, "submission", question_id, cur)
         conn.commit()
         return eval_result, None
     except Exception as e:
         conn.rollback()
-        return None, str(e)
+        return None, "Your submission could not be saved. Please try again."
     finally:
         conn.close()
 
-def activate_rubber_duck(team_id, question_id):
+def activate_rubber_duck(team_id, question_id, enforce_live=False):
     """Activates Rubber Duck hint for target question."""
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+        if enforce_live:
+            error = _live_error(cur)
+            if error:
+                return False, error, None
         cur.execute("SELECT is_used FROM powerups WHERE team_id = ? AND powerup_type = 'RUBBER_DUCK'", (team_id,))
         row = cur.fetchone()
         if not row:
@@ -246,12 +289,15 @@ def activate_rubber_duck(team_id, question_id):
         if row["is_used"]:
             return False, "Rubber Duck has already been used by your team.", None
 
+        if not _assignment_allowed(cur, team_id, question_id):
+            return False, "Question is not unlocked for your team.", None
+
         cur.execute("SELECT hint FROM questions WHERE id = ?", (question_id,))
         q = cur.fetchone()
         hint = q["hint"] if q and q["hint"] else "Review the line boundaries and logic conditions."
 
         cur.execute("""
-            UPDATE powerups 
+            UPDATE powerups
             SET is_used = 1, used_at = CURRENT_TIMESTAMP, target_question_id = ?
             WHERE team_id = ? AND powerup_type = 'RUBBER_DUCK'
         """, (question_id, team_id))
@@ -259,17 +305,22 @@ def activate_rubber_duck(team_id, question_id):
         return True, "Rubber Duck activated (-10% points penalty).", hint
     except Exception as e:
         conn.rollback()
-        return False, str(e), None
+        return False, "Power-up could not be saved. Please try again.", None
     finally:
         conn.close()
 
-def activate_git_revert(team_id, question_id):
+def activate_git_revert(team_id, question_id, enforce_live=False):
     """
     Abandons current question and swaps it for another active question not yet assigned.
     """
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+        if enforce_live:
+            error = _live_error(cur)
+            if error:
+                return False, error, None
         cur.execute("SELECT is_used FROM powerups WHERE team_id = ? AND powerup_type = 'GIT_REVERT'", (team_id,))
         row = cur.fetchone()
         if not row:
@@ -277,9 +328,12 @@ def activate_git_revert(team_id, question_id):
         if row["is_used"]:
             return False, "Git Revert has already been used by your team.", None
 
+        if not _assignment_allowed(cur, team_id, question_id):
+            return False, "Question is not unlocked for your team.", None
+
         cur.execute("""
-            SELECT question_order, is_completed 
-            FROM question_assignments 
+            SELECT question_order, is_completed
+            FROM question_assignments
             WHERE team_id = ? AND question_id = ? AND is_abandoned = 0
         """, (team_id, question_id))
         asgn = cur.fetchone()
@@ -290,7 +344,7 @@ def activate_git_revert(team_id, question_id):
 
         # 1. Try finding an unassigned question from bank
         cur.execute("""
-            SELECT id FROM questions 
+            SELECT id FROM questions
             WHERE is_active = 1 AND id NOT IN (
                 SELECT question_id FROM question_assignments WHERE team_id = ?
             )
@@ -302,14 +356,14 @@ def activate_git_revert(team_id, question_id):
             new_qid = candidate["id"]
             # Mark old question abandoned
             cur.execute("""
-                UPDATE question_assignments 
-                SET is_abandoned = 1, is_unlocked = 0 
+                UPDATE question_assignments
+                SET is_abandoned = 1, is_unlocked = 0
                 WHERE team_id = ? AND question_id = ?
             """, (team_id, question_id))
 
             # Insert replacement with same question order
             cur.execute("""
-                INSERT INTO question_assignments 
+                INSERT INTO question_assignments
                 (team_id, question_id, question_order, is_unlocked, is_completed, is_abandoned)
                 VALUES (?, ?, ?, 1, 0, 0)
             """, (team_id, new_qid, asgn["question_order"]))
@@ -328,21 +382,21 @@ def activate_git_revert(team_id, question_id):
             new_qid = swap_target["question_id"]
             # Mark old question abandoned
             cur.execute("""
-                UPDATE question_assignments 
-                SET is_abandoned = 1, is_unlocked = 0 
+                UPDATE question_assignments
+                SET is_abandoned = 1, is_unlocked = 0
                 WHERE team_id = ? AND question_id = ?
             """, (team_id, question_id))
 
             # Unlock swap target at current order
             cur.execute("""
-                UPDATE question_assignments 
-                SET is_unlocked = 1, question_order = ? 
+                UPDATE question_assignments
+                SET is_unlocked = 1, question_order = ?
                 WHERE team_id = ? AND question_id = ?
             """, (asgn["question_order"], team_id, new_qid))
 
         # Mark powerup used
         cur.execute("""
-            UPDATE powerups 
+            UPDATE powerups
             SET is_used = 1, used_at = CURRENT_TIMESTAMP, target_question_id = ?
             WHERE team_id = ? AND powerup_type = 'GIT_REVERT'
         """, (question_id, team_id))
@@ -351,15 +405,20 @@ def activate_git_revert(team_id, question_id):
         return True, "Git Revert successful! Challenge replaced.", new_qid
     except Exception as e:
         conn.rollback()
-        return False, str(e), None
+        return False, "Power-up could not be saved. Please try again.", None
     finally:
         conn.close()
 
-def arm_double_commit(team_id, question_id):
+def arm_double_commit(team_id, question_id, enforce_live=False):
     """Arms Double Commit (2x points or 0) for next submission on question."""
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+        if enforce_live:
+            error = _live_error(cur)
+            if error:
+                return False, error
         cur.execute("SELECT is_used, is_armed FROM powerups WHERE team_id = ? AND powerup_type = 'DOUBLE_COMMIT'", (team_id,))
         row = cur.fetchone()
         if not row:
@@ -367,8 +426,11 @@ def arm_double_commit(team_id, question_id):
         if row["is_used"]:
             return False, "Double Commit has already been used by your team."
 
+        if not _assignment_allowed(cur, team_id, question_id):
+            return False, "Question is not unlocked for your team."
+
         cur.execute("""
-            UPDATE powerups 
+            UPDATE powerups
             SET is_armed = 1, target_question_id = ?
             WHERE team_id = ? AND powerup_type = 'DOUBLE_COMMIT'
         """, (question_id, team_id))
@@ -376,6 +438,6 @@ def arm_double_commit(team_id, question_id):
         return True, "Double Commit armed! Your next submission will score 2x points if accurate, or 0 if incorrect."
     except Exception as e:
         conn.rollback()
-        return False, str(e)
+        return False, "Power-up could not be saved. Please try again."
     finally:
         conn.close()

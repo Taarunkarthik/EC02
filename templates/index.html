@@ -1,87 +1,67 @@
 {% extends "base.html" %}
-{% block title %}EXIT CODE 0 — IEEE Computer Society Debugging Championship{% endblock %}
-
+{% block title %}EXIT CODE 0 — IEEE Debugging Challenge{% endblock %}
+{% block body_class %}landing-page{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/public.css') }}">{% endblock %}
 {% block content %}
-{% set status = event_state.event_status if event_state else 'WAITING' %}
-<section class="hero" id="home">
-  <div>
-    <span class="hero-badge"><span class="pulse-dot"></span> IEEE WEEK 2026 &bull; TECHNICAL EVENT</span>
-    <h1 class="hero-title">EXIT CODE <span class="zero">0</span></h1>
-    <p class="hero-tagline"><span>Find the Bug.</span><span>Fix the Code.</span><span>Exit Clean.</span></p>
-    <p class="hero-copy">A competitive debugging challenge from the IEEE Computer Society. Teams read broken programs, locate the fault, predict the correct output and commit the fix &mdash; scored live by the server.</p>
-    <div class="hero-cta">
-      <a href="{{ '/arena' if session.get('team_id') else '/register' }}" class="btn btn-primary btn-lg">ENTER THE ARENA</a>
-      <a href="/leaderboard" class="btn btn-outline btn-lg">VIEW LEADERBOARD</a>
+<div class="page-shell public-shell">
+  <section class="landing-hero" aria-labelledby="hero-heading">
+    <div class="hero-copy"><div class="hero-dot-field" data-dot-grid aria-hidden="true"></div>
+      <p class="eyebrow"><span class="blue-dot"></span> IEEE WEEK 2026 <span class="eyebrow-divider">/</span> TECHNICAL EVENT</p>
+      <h1 id="hero-heading" class="tech-hero-heading"><span class="tech-fallback">EXIT CODE <em>0</em></span><span class="tech-title" data-tech-text="EXIT CODE 0" aria-hidden="true"></span></h1>
+      <h2 class="hero-tagline">Find the bug.<br>Fix the code.<br><span>Exit clean.</span></h2>
+      <p class="hero-description">70 minutes. 30 debugging challenges. Python, C and Java. Work in teams of two or three to trace the failures and submit precise fixes.</p>
+      <div class="action-row"><a class="btn btn-primary btn-large" href="{{ '/arena' if session.get('team_id') else '/register' }}">Enter the arena <span aria-hidden="true">↗</span></a><a class="btn btn-secondary btn-large" href="/leaderboard">View leaderboard <span aria-hidden="true">→</span></a></div>
+      <div class="hero-host"><span class="host-mark" aria-hidden="true">CS</span><p>Hosted by <strong>IEEE Computer Society</strong><br><span>Amrita Vishwa Vidyapeetham, Bengaluru</span></p></div>
     </div>
-
-    <div class="event-facts" id="event">
-      <div class="fact"><b>07 OCT 2026</b><span>DATE</span></div>
-      <div class="fact"><b>2:50 PM – 4:00 PM</b><span>WINDOW</span></div>
-      <div class="fact"><b>70 MINUTES</b><span>DURATION</span></div>
-      <div class="fact"><b>TEAMS OF 2–3</b><span>FORMAT</span></div>
+    <div class="hero-visual"><div class="pattern-wave" data-pattern-waves aria-hidden="true"></div>
+      <div data-border-glow class="editor-demo" aria-label="Illustrative debugging demonstration, unrelated to competition questions">
+        <div class="editor-titlebar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>exit-code-0 / warmup.py</span><span class="demo-label">DEMO</span></div>
+        <div class="editor-tab"><span class="file-icon" aria-hidden="true">Py</span> warmup.py <span class="editor-unsaved" aria-hidden="true"></span><span class="tab-close" aria-hidden="true">×</span></div>
+        <div class="editor-breadcrumb">warmup <span>›</span> warmup.py <span>›</span> find_average</div>
+        <div class="demo-code" aria-hidden="true">
+          <div><span class="line-num">1</span><code class="code-comment"># Every detail matters.</code></div>
+          <div><span class="line-num">2</span><code><span class="code-purple">def</span> <span class="code-blue">find_average</span>(values):</code></div>
+          <div><span class="line-num">3</span><code>    total = <span class="code-blue">sum</span>(values)</code></div>
+          <div><span class="line-num">4</span><code>    count = <span class="code-blue">len</span>(values)</code></div>
+          <div><span class="line-num">5</span><code> </code></div>
+          <div><span class="line-num">6</span><code>    <span class="code-comment"># Check the edge case.</span></code></div>
+          <div><span class="line-num">7</span><code>    <span class="code-purple">if</span> count == <span class="code-amber">0</span>:</code></div>
+          <div id="demo-bug-line" class="demo-bug-line"><span class="line-num">8</span><code>        <span class="code-purple">return</span> <span id="demo-return-value" class="code-red">total / count</span></code><span id="demo-line-indicator" class="line-diagnostic">!</span></div>
+          <div><span class="line-num">9</span><code>    <span class="code-purple">return</span> total / count</code></div>
+          <div><span class="line-num">10</span><code> </code></div>
+          <div><span class="line-num">11</span><code><span class="code-blue">print</span>(find_average([]))</code></div>
+        </div>
+        <div class="demo-console"><div class="console-tabs"><span>OUTPUT</span><span class="muted">PROBLEMS <b id="demo-problem-count">1</b></span><button id="demo-toggle" type="button" aria-pressed="false" aria-label="Pause demonstration">Pause demo</button></div><p><span class="console-chevron" aria-hidden="true">›</span><span id="demo-status">Scanning source…</span><span id="demo-status-badge" class="demo-status-badge">RUNNING</span></p></div>
+        <div class="editor-statusbar"><span><span aria-hidden="true">⑂</span> main</span><span>Python · UTF-8 · Ln 8, Col 9</span></div>
+      </div>
+      <div class="hero-live"><div><span class="blue-dot"></span><span class="eyebrow">SYSTEM STATUS</span><strong id="home-event-status">{{ 'READY' if event_state.event_status == 'WAITING' else event_state.event_status }}</strong></div><div><span id="home-team-count">{{ connected_teams }}</span><span>teams registered</span></div></div>
+      <p class="visual-caption"><span aria-hidden="true">↳</span> Warm-up: handle the empty input.</p>
     </div>
-
-    <div class="status-chip" role="status">
-      SYSTEM STATUS
-      <b><span class="dot {{ 'dot-warn' if status == 'WAITING' else ('dot-idle' if status == 'COMPLETED' else '') }}"></span>
-        {{ 'READY' if status == 'WAITING' else status }}</b>
-      <span>&bull; Registered teams: <b id="connected-teams-count">{{ connected_teams }}</b></span>
-    </div>
-  </div>
-
-  <!-- Simulated debugger: purely illustrative -->
-  <div class="ide" aria-hidden="true">
-    <div class="ide-bar"><span class="ide-tab">average.py</span><span style="margin-left:auto">PYTHON</span></div>
-    <div class="ide-body" id="ide-body"></div>
-    <div class="ide-console" id="ide-console"></div>
-  </div>
-</section>
-
-<section class="section reveal" id="how">
-  <div class="section-head"><span class="eyebrow">How it works</span><h2>Analyse. Debug. Fix. Exit 0.</h2></div>
-  <div class="steps">
-    <div class="step"><span class="no">01</span><h3>ANALYSE</h3><p>Read the source.</p></div>
-    <div class="step"><span class="no">02</span><h3>DEBUG</h3><p>Locate the problem.</p></div>
-    <div class="step"><span class="no">03</span><h3>FIX</h3><p>Determine the correction.</p></div>
-    <div class="step"><span class="no">04</span><h3>EXIT 0</h3><p>Commit your answer.</p></div>
-  </div>
-</section>
-
-<section class="section reveal" id="format">
-  <div class="section-head"><span class="eyebrow">Event format</span><h2>One round. Clear stages.</h2></div>
-  <div class="flow">
-    <div class="card flow-item"><span class="idx">STAGE 1</span><h3>Debugging Round</h3><p>70 minutes, server-timed.</p></div>
-    <div class="card flow-item"><span class="idx">STAGE 2</span><h3>Result Verification</h3><p>Organisers review submissions.</p></div>
-    <div class="card flow-item sep"><span class="idx">WHILE YOU WAIT</span><h3>Rapid Fire Quiz</h3><p>Just for fun.</p></div>
-    <div class="card flow-item"><span class="idx">STAGE 3</span><h3>Winner Reveal</h3><p>Final ranking published.</p></div>
-  </div>
-  <p class="note">The rapid-fire quiz is for engagement only and does <b>not</b> affect debugging scores or the final ranking.</p>
-</section>
-
-<section class="section reveal">
-  <div class="section-head"><span class="eyebrow">What you will debug</span><h2>Six kinds of broken.</h2></div>
-  <div class="cats">
-    <div class="card card-hover cat"><h3>Syntax errors</h3><p>Code that will not compile or parse.</p><code>if (x == 1</code></div>
-    <div class="card card-hover cat"><h3>Logical errors</h3><p>Runs fine, answers wrong.</p><code>total / (n - 1)</code></div>
-    <div class="card card-hover cat"><h3>Runtime errors</h3><p>Crashes while executing.</p><code>arr[len(arr)]</code></div>
-    <div class="card card-hover cat"><h3>Edge cases</h3><p>Fails on empty, zero or max.</p><code>nums = []</code></div>
-    <div class="card card-hover cat"><h3>Algorithmic mistakes</h3><p>Right idea, wrong procedure.</p><code>mid = (lo + hi) / 2</code></div>
-    <div class="card card-hover cat"><h3>Output prediction</h3><p>State what the fixed program prints.</p><code>EXIT CODE: 0</code></div>
-  </div>
-</section>
-
-<section class="section reveal">
-  <div class="section-head"><span class="eyebrow">Live competition</span><h2>Watch the board move.</h2><p>Scores and ranks update as the server records submissions. The preview below uses sample teams.</p></div>
-  <div class="card" style="overflow:hidden">
-    <div class="card-header"><span class="mono" style="font-size:.8rem">LIVE LEADERBOARD</span><span class="badge badge-muted">SAMPLE DATA</span></div>
-    <table class="data-table"><tbody id="lb-demo"></tbody></table>
-  </div>
-</section>
-
-<section class="cta-band reveal">
-  <h2>READY TO DEBUG?</h2>
-  <a href="{{ '/arena' if session.get('team_id') else '/register' }}" class="btn btn-primary btn-lg">ENTER THE ARENA</a>
-</section>
+  </section>
+  <section class="event-strip" id="event" aria-label="Event details"><div><span class="eyebrow">THE DATE</span><strong>07 OCT <span>2026</span></strong></div><div><span class="eyebrow">THE WINDOW</span><strong>2:50 <span>—</span> 4:00 <span>PM IST</span></strong></div><div><span class="eyebrow">THE CHALLENGE</span><strong>{{ config.duration_minutes }} <span>MINUTES</span></strong></div><div><span class="eyebrow">YOUR TEAM</span><strong>2—3 <span>MEMBERS</span></strong></div></section>
+  <section class="voltage-band reveal" data-border-glow aria-labelledby="voltage-title">
+    <div class="electric-emblem" data-electric-logo aria-hidden="true"><span class="electric-fallback">/0</span></div>
+    <div class="voltage-copy"><p class="eyebrow">IEEE COMPUTER SOCIETY / DEBUGGING CHAMPIONSHIP</p><h2 id="voltage-title">Every line counts.<br><span>Make yours work.</span></h2><p>Read broken programs. Trace the failure. Commit a fix that holds up.</p></div>
+    <div class="voltage-stamp"><span>ROUND_01</span><strong>70<span>MIN</span></strong><span>SERVER-TIMED</span></div>
+  </section>
+  <section class="public-section reveal" aria-labelledby="how-heading">
+    <div class="section-heading"><div><p class="eyebrow">01 / HOW IT WORKS</p><h2 id="how-heading">Analyse. Debug. Fix. Exit 0.</h2></div><span class="section-annotation">FOUR STEPS. ONE CLEAN EXIT.</span></div>
+    <ol class="process-list">{% for title,code,description in [('ANALYSE','read(source)','Read the source. Follow the program.'),('DEBUG','trace(failure)','Find the failing line and its cause.'),('FIX','commit(answer)','Work out the output and correction.'),('EXIT 0','return success','Submit your fix. Take the next challenge.')] %}<li><span class="process-number">0{{loop.index}}</span><h3>{{title}}</h3><code>{{code}}</code><p>{{description}}</p></li>{% endfor %}</ol>
+  </section>
+  <section class="public-section format-section reveal" id="format" aria-labelledby="format-heading">
+    <div class="section-heading"><div><p class="eyebrow">02 / EVENT FORMAT</p><h2 id="format-heading">One round. Clear stages.</h2></div><span class="section-annotation">DEBUGGING DECIDES THE RANKINGS.</span></div>
+    <ol class="format-timeline">{% for title,tag,description in [('Debugging round','70 MIN','Find the faults. Submit your fixes.'),('Result verification','REVIEW','Submissions lock. Organizers verify.'),('Rapid fire quiz','FUN ROUND','Ten questions while the judges review.'),('Winner reveal','FINAL','Official debugging rankings, published.')] %}<li data-border-glow><span>0{{loop.index}}</span><div><h3>{{title}}</h3><p>{{description}}</p></div><span class="badge">{{tag}}</span></li>{% endfor %}</ol>
+    <p class="format-note">Quiz points are separate. Your debugging score determines your final rank.</p>
+  </section>
+  <section class="public-section reveal" aria-labelledby="challenges-heading">
+    <div class="section-heading"><div><p class="eyebrow">03 / THE QUESTION BANK</p><h2 id="challenges-heading">Six kinds of broken.</h2></div><span class="section-annotation">PYTHON / C / JAVA</span></div>
+    <div class="challenge-grid">{% for symbol,name,description,code in [('{}','Syntax errors','One character can stop everything.','if (x == 1'),('≠','Logical errors','Runs fine. Answers wrong.','total / (n - 1)'),('!','Runtime errors','It works. Until it doesn’t.','arr[len(arr)]'),('∅','Edge cases','Empty, zero, one, or too many.','nums = []'),('O(n)','Algorithmic mistakes','Right idea. Wrong procedure.','mid = (lo + hi) / 2'),('>_','Output prediction','Trace every step of the fixed code.','EXIT CODE: 0')] %}<article data-border-glow><span class="challenge-symbol" aria-hidden="true">{{symbol}}</span><h3>{{name}}</h3><p>{{description}}</p><code>{{code}}</code></article>{% endfor %}</div>
+  </section>
+  <section class="public-section live-preview-section reveal" aria-labelledby="live-heading">
+    <div class="live-preview-copy"><p class="eyebrow"><span class="blue-dot"></span> 04 / LIVE COMPETITION</p><h2 id="live-heading">Watch the<br><span>board move.</span></h2><p>Every recorded submission counts. Follow the teams, the fixes, and the chase to the top.</p><a href="/leaderboard" class="text-link">Open live leaderboard <span aria-hidden="true">↗</span></a></div>
+    <div class="card preview-board" data-border-glow><div class="preview-board-heading"><span class="eyebrow">CURRENT STANDINGS</span><span class="badge" id="preview-state">{{event_state.event_status}}</span></div><div class="preview-column-labels"><span>RANK / TEAM</span><span>POINTS</span></div><div id="home-standings" aria-live="polite"><p class="preview-empty">Loading the latest standings…</p></div><p class="preview-footnote">Debugging scores only · Updated from the event server</p></div>
+  </section>
+  <section class="closing-cta reveal" data-border-glow><div><p class="eyebrow">YOUR NEXT CHALLENGE / EXIT CODE 0</p><h2>Ready to debug?</h2><p>Bring a team of 2–3. Leave with a clean exit.</p></div><a class="btn btn-primary btn-large" href="{{ '/arena' if session.get('team_id') else '/register' }}">Enter the arena <span aria-hidden="true">↗</span></a></section>
+</div>
 {% endblock %}
-
-{% block scripts %}<script src="{{ url_for('static', filename='js/landing.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/landing.js') }}" defer></script>{% endblock %}

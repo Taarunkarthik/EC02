@@ -1,6 +1,7 @@
 import sqlite3
 import json
 import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from config import Config
@@ -38,6 +39,28 @@ def init_db(force_reset=False):
 
     conn.executescript(schema_sql)
     
+    # Additive migrations preserve existing competition data.
+    columns = {r["name"] for r in conn.execute("PRAGMA table_info(submissions)")}
+    for name in ("request_id", "response_json"):
+        if name not in columns:
+            conn.execute(f"ALTER TABLE submissions ADD COLUMN {name} TEXT")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_request ON submissions(team_id, request_id) WHERE request_id IS NOT NULL")
+    conn.execute("INSERT OR IGNORE INTO competition_controls (id, generation) VALUES (1, ?)", (uuid.uuid4().hex,))
+
+    # Preserve activity collected by the original phase 1 implementation.
+    conn.execute("""INSERT INTO team_activity (team_id, event_type, created_at)
+        SELECT old.team_id,
+               CASE old.event_type WHEN 'focus_lost' THEN 'window_blur'
+                 WHEN 'focus_regained' THEN 'window_focus'
+                 WHEN 'tab_visible' THEN 'window_visible' ELSE old.event_type END,
+               old.created_at
+        FROM activity_events old
+        WHERE NOT EXISTS (SELECT 1 FROM team_activity current
+          WHERE current.team_id = old.team_id AND current.created_at = old.created_at
+          AND current.event_type = CASE old.event_type WHEN 'focus_lost' THEN 'window_blur'
+            WHEN 'focus_regained' THEN 'window_focus'
+            WHEN 'tab_visible' THEN 'window_visible' ELSE old.event_type END)""")
+
     # Initialize event_state row if missing
     cur = conn.cursor()
     cur.execute("SELECT id FROM event_state WHERE id = 1")
@@ -101,6 +124,8 @@ def register_team(team_name, member1, member2, member3=None, email=None, passwor
 
     if not name:
         return None, "Team name is required."
+    if any(len(value) > 80 for value in (name, m1, m2, m3)) or len(em) > 254:
+        return None, "Team and member names must be 80 characters or fewer."
     if not m1 or not m2:
         return None, "A team must have at least 2 members (Member 1 and Member 2 are required)."
 
@@ -115,6 +140,9 @@ def register_team(team_name, member1, member2, member3=None, email=None, passwor
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+        if cur.execute("SELECT results_published FROM competition_controls WHERE id = 1").fetchone()[0]:
+            return None, "Registration is closed because final results have been published."
         # Check duplicate name
         cur.execute("SELECT id FROM teams WHERE UPPER(name) = UPPER(?)", (name,))
         if cur.fetchone():
@@ -146,7 +174,7 @@ def register_team(team_name, member1, member2, member3=None, email=None, passwor
         return team_id, None
     except sqlite3.IntegrityError as e:
         conn.rollback()
-        return None, f"Registration error: {str(e)}"
+        return None, "Registration could not be saved. Please try a different team name."
     finally:
         conn.close()
 
@@ -211,7 +239,7 @@ def get_client_question(team_id, question_id):
                qa.question_order, qa.is_unlocked, qa.is_completed
         FROM question_assignments qa
         JOIN questions q ON qa.question_id = q.id
-        WHERE qa.team_id = ? AND qa.question_id = ? AND qa.is_abandoned = 0
+        WHERE qa.team_id = ? AND qa.question_id = ? AND qa.is_abandoned = 0 AND qa.is_unlocked = 1
     """, (team_id, question_id))
     q = cur.fetchone()
     conn.close()
@@ -229,7 +257,7 @@ def unlock_next_question(team_id, current_order, cur=None):
         cur.execute("""
             UPDATE question_assignments 
             SET is_unlocked = 1 
-            WHERE team_id = ? AND question_order = ?
+            WHERE team_id = ? AND question_order = ? AND is_abandoned = 0
         """, (team_id, current_order + 1))
         if close_conn:
             conn.commit()
@@ -244,5 +272,28 @@ def log_admin_action(action, details=""):
         conn.commit()
     except Exception:
         pass
+    finally:
+        conn.close()
+
+
+def record_activity(team_id, event_type, question_id=None, cur=None):
+    """Only store organizer signals; browser signals never change scores."""
+    owned = cur is None
+    conn = get_db_connection() if owned else None
+    cur = conn.cursor() if owned else cur
+    try:
+        cur.execute("INSERT INTO team_activity (team_id, event_type, question_id) VALUES (?, ?, ?)",
+                    (team_id, event_type, question_id))
+        if owned:
+            conn.commit()
+    finally:
+        if owned:
+            conn.close()
+
+
+def get_competition_controls():
+    conn = get_db_connection()
+    try:
+        return dict(conn.execute("SELECT * FROM competition_controls WHERE id = 1").fetchone())
     finally:
         conn.close()

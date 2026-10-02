@@ -1,40 +1,7 @@
 {% extends "base.html" %}
-
-{% block title %}Admin Console Login — EXIT CODE 0{% endblock %}
-
+{% block title %}Organizer Access — EXIT CODE 0{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/public.css') }}">{% endblock %}
 {% block content %}
-<div class="container" style="max-width: 480px; margin-top: 4rem;">
-  <div class="card" style="border-color: var(--primary);">
-    <div class="card-header">
-      <span class="mono text-primary font-bold">&gt; ADMIN SECURITY CREDENTIALS</span>
-      <span class="badge badge-primary">AUTHORIZED ONLY</span>
-    </div>
-
-    {% if error %}
-      <div class="badge badge-error" style="width: 100%; padding: 0.75rem; margin-bottom: 1.25rem; font-size: 0.85rem;">
-        ⚠ {{ error }}
-      </div>
-    {% endif %}
-
-    <form method="POST" action="/admin/login">
-      <div class="form-group">
-        <label class="form-label" for="username">Admin Username</label>
-        <input type="text" id="username" name="username" class="form-control" required autofocus autocomplete="off">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="password">Security Key / Password</label>
-        <input type="password" id="password" name="password" class="form-control" required>
-      </div>
-
-      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; font-size: 1rem;">
-        AUTHENTICATE SESSION
-      </button>
-    </form>
-
-    <div class="text-dim mono" style="font-size: 0.75rem; text-align: center; margin-top: 1.5rem;">
-      Protected portal &bull; IEEE Computer Society Control Node
-    </div>
-  </div>
-</div>
+<div class="page-shell compact-auth-shell"><section class="card auth-panel admin-access"><span class="admin-access-symbol" aria-hidden="true">⌘</span><p class="eyebrow">EXIT CODE 0 / ORGANIZER ACCESS</p><h1>Event control starts here.</h1><p class="muted">Sign in with your organizer credentials.</p>{% if error %}<div class="form-error" role="alert">{{ error }}</div>{% endif %}<form method="POST" action="/admin/login" class="team-access-form"><div class="field"><label for="username">Username</label><input class="input" type="text" id="username" name="username" required autocomplete="username" autofocus value="{{ request.form.get('username', '') }}"></div><div class="field"><label for="password">Password</label><input class="input" type="password" id="password" name="password" required autocomplete="current-password"></div><button type="submit" class="btn btn-primary full-width">Sign in to event control <span aria-hidden="true">→</span></button></form><p class="auth-footer-note">Authorized organizers only · IEEE Computer Society</p></section><a href="/register?tab=login" class="text-link">Looking for team login? →</a></div>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/registration.js') }}" defer></script>{% endblock %}

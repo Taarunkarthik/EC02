@@ -1,0 +1,182 @@
+/* IEEE blue, technical charcoal and restrained Computer Society amber. */
+
+.landing-hero {
+  position:relative;
+  isolation:isolate;
+  gap:56px
+}
+.hero-visual {
+  isolation:isolate
+}
+.hero-visual:before {
+  display:none
+}
+.pattern-wave {
+  position:absolute;
+  inset:-45px -25px;
+  width:calc(100% + 50px);
+  height:calc(100% + 90px);
+  z-index:-1;
+  pointer-events:none
+}
+.hero-copy h1 {
+  letter-spacing:-.065em;
+  font-weight:750
+}
+.hero-copy>.eyebrow .blue-dot {
+  background:var(--cs-accent)
+}
+.hero-period {
+  display:none
+}
+.hero-tagline {
+  font-weight:450
+}
+.hero-host .host-mark {
+  color:var(--cs-accent);
+  border-color:#dca45a40
+}
+.editor-demo {
+  transform:none;
+  background:#111923;
+  box-shadow:0 16px 50px #0003
+}
+.editor-demo .editor-titlebar {
+  background:#1b2833
+}
+.editor-demo .editor-statusbar {
+  background:#163a50
+}
+.hero-zero {
+  color:#72b9d9
+}
+.event-strip {
+  border-top-color:#49616e;
+  border-bottom-color:#2b3b47
+}
+.event-strip .eyebrow {
+  color:var(--cs-accent)
+}
+.public-section {
+  padding-block:48px
+}
+.challenge-grid article {
+  background:transparent
+}
+.challenge-symbol {
+  color:var(--text-secondary)
+}
+.challenge-grid article:hover .challenge-symbol {
+  color:var(--accent)
+}
+.closing-cta {
+  border-radius:4px;
+  background:#15232d
+}
+.cta-zero {
+  opacity:.05
+}
+.btn-primary {
+  box-shadow:none
+}
+.brand-symbol {
+  background:#122b3b;
+  border-color:#4c778b;
+  color:#79bddb
+}
+.card {
+  box-shadow:none
+}
+.arena-brand .brand-symbol {
+  background:#132b3b
+}
+.arena-toolbar .badge-primary {
+  color:var(--accent-hover);
+  background:#56a9d211;
+  border-color:#56a9d235
+}
+/* React provides the edge, spring tab control, and request trace. */
+[data-border-glow] { position:relative; }
+.commit-trace { border:1px solid var(--border); border-radius:5px; padding:11px; margin-bottom:12px; background:#101b25; font-size:10px; color:var(--text-secondary); }
+.preview-row {
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:16px 0;
+  border-top:1px solid var(--border)
+}
+.preview-row:first-child {
+  border-top:0
+}
+.preview-rank {
+  font:12px var(--font-mono);
+  color:var(--text-muted)
+}
+.preview-row strong {
+  font-size:12px;
+  font-weight:500
+}
+.preview-score {
+  margin-left:auto;
+  color:var(--accent);
+  font:15px var(--font-mono)
+}
+.team-cell small {
+  display:block;
+  margin-top:4px;
+  font-size:9px
+}
+.team-cell strong {
+  color:var(--text-primary);
+  font-weight:550
+}
+.team-cell .badge {
+  margin-top:5px
+}
+.standings-table tr.own-team {
+  background:#56a9d210
+}
+.rank-movement {
+  display:inline-block;
+  font:9px var(--font-mono);
+  margin-left:10px
+}
+.rank-up {
+  color:var(--success)
+}
+.rank-down {
+  color:var(--warning)
+}
+.rank-changed {
+  animation:rank-update .3s
+}
+.score-cell {
+  color:var(--text-primary);
+  font-weight:600
+}
+.table-empty {
+  padding:35px;
+  text-align:center
+}
+.table-empty p {
+  margin:8px 0 0
+}
+.podium-card.own-team {
+  border-color:#56a9d270
+}
+@media(max-width:800px) {
+  .landing-hero {
+    gap:38px
+  }
+  .pattern-wave {
+    inset:0;
+    width:100%;
+    height:100%
+  }
+  .public-section {
+    padding-block:38px
+  }
+}
+
+.challenge-grid { background:transparent; border-radius:0; border-top:1px solid var(--border); gap:0; }
+.challenge-grid article { border-bottom:1px solid var(--border); padding:26px 20px 26px 0; }

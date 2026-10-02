@@ -1,22 +1,15 @@
-// Waiting room: live status, redirect on start. The countdown is cosmetic only —
-// the server's start time is already in effect, so we never delay the real clock.
 (() => {
-  const close = document.getElementById('init-close');
-  if (close) close.addEventListener('click', () => document.getElementById('init-overlay').remove());
-
-  let leaving = false;
-  document.addEventListener('ex0:event', e => {
-    const d = e.detail;
-    const c = document.getElementById('teams-registered-count'); if (c && d.connected_teams !== undefined) c.textContent = d.connected_teams;
-    if (leaving) return;
-    if (d.event_status === 'COMPLETED') { leaving = true; location.href = '/result'; }
-    else if (d.event_status === 'LIVE') {
-      leaving = true;
-      const ov = document.getElementById('countdown'), n = document.getElementById('count-num');
-      ov.classList.remove('hidden');
-      let i = 3; // 3-2-1 then go; shortened to 2s total so participants lose little time
-      const tick = () => { if (i === 0) { location.href = '/arena'; return; } n.textContent = i--; n.style.animation = 'none'; void n.offsetWidth; n.style.animation = ''; setTimeout(tick, 650); };
-      tick();
-    }
-  });
+  let entering = false;
+  function update(state) {
+    const count = document.getElementById('teams-registered-count'); if(count && state.connected_teams !== undefined) count.textContent = state.connected_teams;
+    if(state.event_status === 'COMPLETED') { location.replace('/result'); return; }
+    if(state.event_status !== 'LIVE' || entering) return;
+    entering = true;
+    document.getElementById('lobby-status-heading').textContent = 'Event started.';
+    document.getElementById('lobby-status-description').textContent = 'Preparing your debug arena. The server clock is running.';
+    document.getElementById('lobby-status-text').textContent = 'Entering the arena';
+    const counter = document.getElementById('lobby-countdown'); counter.hidden = false; let number = 3; counter.textContent = number;
+    const interval = setInterval(() => { number--; if(number) counter.textContent = number; else { clearInterval(interval); location.replace('/arena'); } }, 600);
+  }
+  document.addEventListener('eventstate', e => update(e.detail)); if(App.eventState) update(App.eventState);
 })();

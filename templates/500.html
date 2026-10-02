@@ -1,10 +1,4 @@
 {% extends "base.html" %}
-{% block title %}500 — Unhandled Exception{% endblock %}
-{% block content %}
-<div class="errpage">
-  <div class="code">500</div>
-  <h1>UNHANDLED EXCEPTION</h1>
-  <p>Something went wrong on our side. Your progress is safe. Try again, or contact an event volunteer.</p>
-  <a href="/" class="btn btn-primary">Back to home</a>
-</div>
-{% endblock %}
+{% block title %}Service Unavailable — EXIT CODE 0{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/public.css') }}">{% endblock %}
+{% block content %}<div class="page-shell error-shell"><span class="eyebrow">EXIT CODE 0 / SERVER ERROR</span><div class="error-number error-number-danger" aria-hidden="true">500</div><h1>An unexpected exception.</h1><p>The server couldn’t complete your request. Try reconnecting, or ask an event volunteer for help if this continues.</p><div class="error-advice">If you were submitting an answer, check its status in the arena before trying again.</div><div class="action-row"><a href="/arena" class="btn btn-primary">Reconnect to arena <span aria-hidden="true">→</span></a><a href="/" class="btn btn-secondary">Return home</a></div></div>{% endblock %}

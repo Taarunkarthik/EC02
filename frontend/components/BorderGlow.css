@@ -1,0 +1,30 @@
+.border-glow-card { position:relative; isolation:isolate; border-radius:var(--border-radius); background:var(--card-bg); --edge-proximity:0; }
+.border-glow-inner { position:relative; z-index:1; border-radius:inherit; }
+.border-glow-card > .edge-light { position:absolute; inset:-1px; border-radius:inherit; pointer-events:none; padding:1px; background:conic-gradient(from var(--cursor-angle,0deg),transparent 0deg,var(--glow-color) calc(var(--cone-spread) * 1deg),transparent calc(var(--cone-spread) * 2deg),transparent 360deg); mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0); mask-composite:exclude; -webkit-mask-composite:xor; opacity:clamp(0,calc((var(--edge-proximity) - (100 - var(--edge-sensitivity))) / var(--edge-sensitivity)),1); transition:opacity .18s; }
+.border-glow-card:before { content:''; position:absolute; inset:0; border-radius:inherit; background:var(--gradient-one),var(--gradient-two),var(--gradient-three); opacity:calc(var(--fill-opacity) * var(--edge-proximity) / 100); pointer-events:none; }
+[data-react-border-root] { position:absolute; inset:0; pointer-events:none; z-index:3; border-radius:inherit; }
+[data-react-border-root] > .border-glow-card { width:100%; height:100%; }
+[data-border-glow]:after { display:none; }
+@media(prefers-reduced-motion:reduce) { .border-glow-card>.edge-light,.border-glow-card:before { display:none; } }
+
+/* Explicit opt-in: the home editor keeps its original BorderGlow treatment. */
+.border-glow-card--strong { --strong-edge:#ed263f; }
+.border-glow-card--strong::after {
+  content:''; position:absolute; inset:-1px; z-index:2; border:2px solid var(--strong-edge); border-radius:inherit;
+  opacity:.78; box-shadow:0 0 10px #ed263f35,inset 0 0 8px #ed263f16; pointer-events:none;
+}
+.border-glow-card--strong > .edge-light {
+  inset:-2px; padding:3px; z-index:3;
+  background:conic-gradient(from var(--cursor-angle,0deg),transparent 0deg,#fff2f4 14deg,var(--glow-color) 40deg,transparent 110deg,transparent 360deg);
+  opacity:clamp(.28,calc(.3 + var(--edge-proximity) / 140),1);
+  transition:opacity .16s ease;
+}
+.border-glow-card--strong::before {
+  background:radial-gradient(210px circle at var(--pointer-x,50%) var(--pointer-y,50%),var(--glow-color-20),transparent 80%);
+  opacity:calc(var(--edge-proximity) / 125);
+  transition:opacity .16s ease;
+}
+@media (prefers-reduced-motion:reduce) {
+  .border-glow-card--strong::after { opacity:.85; }
+  .border-glow-card--strong > .edge-light,.border-glow-card--strong::before { display:none; }
+}

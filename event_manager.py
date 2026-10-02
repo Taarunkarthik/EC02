@@ -1,4 +1,6 @@
 from datetime import datetime, timezone, timedelta
+import math
+import uuid
 from database import get_db_connection, log_admin_action
 from config import Config
 
@@ -6,7 +8,8 @@ def parse_iso(ts_str):
     if not ts_str:
         return None
     try:
-        return datetime.fromisoformat(ts_str)
+        parsed = datetime.fromisoformat(ts_str)
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
     except Exception:
         return None
 
@@ -61,12 +64,16 @@ def get_event_state():
                 cur.execute("""
                     UPDATE event_state 
                     SET event_status = 'COMPLETED', remaining_seconds = 0 
-                    WHERE id = 1
-                """)
+                    WHERE id = 1 AND event_status = 'LIVE' AND is_paused = 0 AND event_end_time = ?
+                """, (state["event_end_time"],))
+                changed = cur.rowcount
                 conn.commit()
+                if not changed:
+                    conn.close()
+                    return get_event_state()
                 log_admin_action("TIMER_EXPIRED", "70-minute event timer reached zero. Competition completed.")
             else:
-                remaining = int(diff)
+                remaining = math.ceil(diff)
 
     conn.close()
 
@@ -87,6 +94,9 @@ def start_event():
 
     conn = get_db_connection()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+        if conn.execute("SELECT event_status FROM event_state WHERE id = 1").fetchone()[0] != "WAITING":
+            return False, "The event has already started. Resume a paused event or reset before restarting."
         conn.execute("""
             UPDATE event_state 
             SET event_status = 'LIVE',
@@ -103,7 +113,7 @@ def start_event():
         return True, "Competition started! All teams can now access challenges."
     except Exception as e:
         conn.rollback()
-        return False, str(e)
+        return False, "The event action could not be saved. Please try again."
     finally:
         conn.close()
 
@@ -120,20 +130,22 @@ def pause_event():
 
     conn = get_db_connection()
     try:
-        conn.execute("""
+        result = conn.execute("""
             UPDATE event_state 
             SET event_status = 'PAUSED',
                 is_paused = 1,
                 pause_time = ?,
                 remaining_seconds = ?
-            WHERE id = 1
-        """, (format_iso(now), remaining))
+            WHERE id = 1 AND event_status = 'LIVE' AND event_end_time = ?
+        """, (format_iso(now), remaining, state["event_end_time"]))
+        if not result.rowcount:
+            return False, "Event state changed. Refresh the controls and try again."
         conn.commit()
         log_admin_action("PAUSE_EVENT", f"Event paused with {remaining} seconds remaining.")
         return True, "Competition paused."
     except Exception as e:
         conn.rollback()
-        return False, str(e)
+        return False, "The event action could not be saved. Please try again."
     finally:
         conn.close()
 
@@ -149,20 +161,22 @@ def resume_event():
 
     conn = get_db_connection()
     try:
-        conn.execute("""
+        result = conn.execute("""
             UPDATE event_state 
             SET event_status = 'LIVE',
                 is_paused = 0,
                 pause_time = NULL,
                 event_end_time = ?
-            WHERE id = 1
+            WHERE id = 1 AND event_status = 'PAUSED'
         """, (format_iso(new_end_dt),))
+        if not result.rowcount:
+            return False, "Event state changed. Refresh the controls and try again."
         conn.commit()
         log_admin_action("RESUME_EVENT", f"Event resumed with {remaining} seconds remaining.")
         return True, "Competition resumed."
     except Exception as e:
         conn.rollback()
-        return False, str(e)
+        return False, "The event action could not be saved. Please try again."
     finally:
         conn.close()
 
@@ -184,7 +198,7 @@ def end_event():
         return True, "Competition concluded. All submissions are locked."
     except Exception as e:
         conn.rollback()
-        return False, str(e)
+        return False, "The event action could not be saved. Please try again."
     finally:
         conn.close()
 
@@ -193,7 +207,7 @@ def reset_event_data(confirmation):
     Safely purges event progress (teams, participants, submissions, powerups, scores).
     Requires typing 'RESET EVENT' exactly as specified in Section 28.
     """
-    if confirmation.strip() != "RESET EVENT" and confirmation.strip() != "RESET":
+    if not isinstance(confirmation, str) or confirmation.strip() != "RESET EVENT":
         return False, "Confirmation failed. You must type 'RESET EVENT' exactly to proceed."
 
     cfg = Config.load_event_config()
@@ -202,6 +216,10 @@ def reset_event_data(confirmation):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        cur.execute("BEGIN IMMEDIATE")
+        cur.execute("DELETE FROM quiz_answers")
+        cur.execute("DELETE FROM quiz_sessions")
+        cur.execute("DELETE FROM team_activity")
         cur.execute("DELETE FROM activity_events")
         cur.execute("DELETE FROM submissions")
         cur.execute("DELETE FROM powerups")
@@ -221,11 +239,12 @@ def reset_event_data(confirmation):
                 remaining_seconds = ?
             WHERE id = 1
         """, (dur, dur * 60))
+        cur.execute("UPDATE competition_controls SET quiz_status = 'WAITING', results_published = 0, generation = ? WHERE id = 1", (uuid.uuid4().hex,))
         conn.commit()
         log_admin_action("RESET_EVENT", "Tournament data completely reset to initial state.")
         return True, "Event data successfully reset to initial state."
     except Exception as e:
         conn.rollback()
-        return False, str(e)
+        return False, "The event action could not be saved. Please try again."
     finally:
         conn.close()

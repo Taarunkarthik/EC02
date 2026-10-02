@@ -1,4 +1,13 @@
 import sys
+import os
+import tempfile
+import atexit
+
+# Acceptance checks must never reset a real competition database.
+_test_directory = tempfile.TemporaryDirectory(prefix="exitcode-acceptance-")
+atexit.register(_test_directory.cleanup)
+os.environ["DATABASE_PATH"] = os.path.join(_test_directory.name, "acceptance.db")
+
 from app import app
 from database import init_db, get_db_connection, register_team, get_team_assigned_questions, get_client_question
 from event_manager import reset_event_data, start_event, get_event_state, end_event
@@ -26,7 +35,7 @@ def run_critical_scenario_checks():
     conn.close()
     assert t_row is not None
     assert t_row["name"] == "Team Alpha"
-    print("[OK] PASS: Team Alpha registered as EX0-001 and persists across refresh.")
+    print(f"[OK] PASS: Team Alpha registered as EX0-001 and persists across refresh.")
 
     # --- Scenario 2: Start event. Refresh participant page. Confirm timer has NOT reset. ---
     print("\n[Scenario 2] Start event & Server Timer persistence verification...")
@@ -42,7 +51,7 @@ def run_critical_scenario_checks():
     assert st2["event_status"] == "LIVE"
     assert st2["event_end_time"] == end_time_orig
     assert abs(st1["remaining_seconds"] - st2["remaining_seconds"]) <= 1
-    print("[OK] PASS: Event LIVE with 70-min server clock. End time fixed at {end_time_orig}, timer not reset.")
+    print(f"[OK] PASS: Event LIVE with 70-min server clock. End time fixed at {end_time_orig}, timer not reset.")
 
     # --- Scenario 3: Open a question. Refresh. Confirm the same question remains assigned. ---
     print("\n[Scenario 3] Question assignment & Refresh persistence...")
@@ -54,7 +63,7 @@ def run_critical_scenario_checks():
     assigned_2 = get_team_assigned_questions(tid_a)
     assert assigned_2[0]["id"] == "Q01"
     assert assigned_2[0]["is_unlocked"] == 1
-    print("[OK] PASS: Question Q01 remains deterministically assigned upon refresh.")
+    print(f"[OK] PASS: Question Q01 remains deterministically assigned upon refresh.")
 
     # --- Scenario 4: Submit an answer. Refresh. Confirm score remains. ---
     print("\n[Scenario 4] Submit an answer & Score persistence...")
@@ -78,7 +87,7 @@ def run_critical_scenario_checks():
     conn.close()
     assert sc_row["score"] == awarded_score
     assert sc_row["completed_count"] == 1
-    print("[OK] PASS: Score {awarded_score} and 1 completed challenge accurately persisted across refresh.")
+    print(f"[OK] PASS: Score {awarded_score} and 1 completed challenge accurately persisted across refresh.")
 
     # --- Scenario 5: Use Rubber Duck. Refresh. Confirm Rubber Duck remains used. ---
     print("\n[Scenario 5] Rubber Duck usage & Refresh persistence...")
@@ -96,7 +105,7 @@ def run_critical_scenario_checks():
     # Reusing fails
     ok_duck2, msg_duck2, _ = activate_rubber_duck(tid_a, "Q03")
     assert ok_duck2 is False
-    print("[OK] PASS: Rubber Duck persisted as USED. Cannot be reused or restored by refresh.")
+    print(f"[OK] PASS: Rubber Duck persisted as USED. Cannot be reused or restored by refresh.")
 
     # --- Scenario 6: Use Git Revert. Refresh. Confirm the original question cannot return. ---
     print("\n[Scenario 6] Git Revert usage & abandoned question exclusion...")
@@ -117,7 +126,7 @@ def run_critical_scenario_checks():
     assigned_after_revert = get_team_assigned_questions(tid_a)
     active_ids = [q["id"] for q in assigned_after_revert]
     assert "Q02" not in active_ids
-    print("[OK] PASS: Git Revert swapped Q02 for {new_qid}. Q02 marked abandoned and cannot return.")
+    print(f"[OK] PASS: Git Revert swapped Q02 for {new_qid}. Q02 marked abandoned and cannot return.")
 
     # --- Scenario 7: Use Double Commit. Submit correct answer. Confirm doubled score. ---
     print("\n[Scenario 7] Double Commit 2x multiplier verification...")
@@ -136,7 +145,7 @@ def run_critical_scenario_checks():
     assert err_b is None
     assert res_b["is_double_commit"] == 1
     assert res_b["total_score"] >= 30.0  # 2x of raw >= 15
-    print("[OK] PASS: Double Commit successfully armed and doubled score to {res_b['total_score']} pts.")
+    print(f"[OK] PASS: Double Commit successfully armed and doubled score to {res_b['total_score']} pts.")
 
     # --- Scenario 8: Attempt to submit after timer reaches zero. Confirm submission is rejected. ---
     print("\n[Scenario 8] Reject submission after timer expiration...")
@@ -161,7 +170,7 @@ def run_critical_scenario_checks():
         data_post = res_post_end.get_json()
         assert data_post["success"] is False
         assert "closed" in data_post["error"].lower()
-    print("[OK] PASS: Submissions strictly rejected (HTTP 403) after competition ends.")
+    print(f"[OK] PASS: Submissions strictly rejected (HTTP 403) after competition ends.")
 
     # --- Scenario 9: Restart Flask. Confirm event state and scores are recovered from SQLite. ---
     print("\n[Scenario 9] Recovery across simulated Flask application restart...")
@@ -175,7 +184,7 @@ def run_critical_scenario_checks():
     rec_score = cur.fetchone()["score"]
     conn.close()
     assert rec_score == awarded_score
-    print("[OK] PASS: Event state ('COMPLETED') and score ({rec_score}) successfully recovered from SQLite.")
+    print(f"[OK] PASS: Event state ('COMPLETED') and score ({rec_score}) successfully recovered from SQLite.")
 
     # --- Scenario 10: Try to access an admin route without authentication. Confirm access is denied. ---
     print("\n[Scenario 10] Security boundary: Deny unauthenticated admin access...")
@@ -189,7 +198,7 @@ def run_critical_scenario_checks():
         res_act = client.post("/api/admin/event-action", json={"action": "start"})
         assert res_act.status_code == 302
         assert "/admin/login" in res_act.headers["Location"]
-    print("[OK] PASS: Protected admin routes securely redirect unauthenticated requests to login.")
+    print(f"[OK] PASS: Protected admin routes securely redirect unauthenticated requests to login.")
 
     print("\n=======================================================")
     print(" ALL 10 CRITICAL SCENARIOS VERIFIED SUCCESSFULLY! [OK]")

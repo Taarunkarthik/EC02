@@ -2,63 +2,60 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}EXIT CODE 0 — IEEE Computer Society Debugging Championship{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080808">
+  <meta name="description" content="EXIT CODE 0. The IEEE Computer Society competitive debugging challenge at Amrita Vishwa Vidyapeetham, Bengaluru.">
+  <title>{% block title %}EXIT CODE 0 — IEEE Computer Society{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%233b82f6'/><text x='50' y='70' font-size='60' font-family='monospace' font-weight='700' text-anchor='middle' fill='white'>0</text></svg>">
+  {% block styles %}{% endblock %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/interactions.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='dist/react-bits.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/black-red.css') }}">
   {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
-  {% set in_admin = request.path.startswith('/admin') and session.get('is_admin') %}
-  {% block header %}
+  <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="navbar">
-    <a href="{{ '/admin/dashboard' if in_admin else '/' }}" class="nav-brand">
-      <span class="mono">EXIT CODE <span class="text-primary">0</span></span>
-      <span class="brand-badge">{{ 'ADMIN' if in_admin else 'IEEE COMPUTER SOCIETY' }}</span>
+    <a href="{{ url_for('index') }}" class="nav-brand" aria-label="EXIT CODE 0 home">
+      <span class="brand-symbol" aria-hidden="true">/0</span>
+      <span class="brand-lockup"><strong>IEEE <span>Computer Society</span></strong><small>AMRITA · BENGALURU</small></span>
     </a>
-
-    <nav class="nav-links" aria-label="Primary">
-      <span class="conn" id="conn-indicator" title="Server connection"><span class="dot"></span><span id="conn-text">SERVER ONLINE</span></span>
-      <span class="badge" title="Event status"><span class="pulse-dot"></span><span id="global-event-status">{{ event_state.event_status if event_state else 'WAITING' }}</span></span>
-
-      {% if in_admin %}
-        <a href="/admin/dashboard" class="nav-link {{ 'active' if request.path in ['/admin','/admin/dashboard'] }}">Dashboard</a>
-        <a href="/leaderboard" class="nav-link">Leaderboard</a>
-        <a href="/admin/dashboard#controls" class="nav-link">Event Control</a>
-        <a href="/admin/dashboard#questions" class="nav-link">Questions</a>
-        <a href="/admin/logout" class="btn btn-outline btn-sm">Logout</a>
-        <a href="/" class="btn btn-secondary btn-sm">View Website</a>
+    <button class="nav-toggle btn btn-ghost" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="site-navigation">Menu <span aria-hidden="true">☰</span></button>
+    <nav id="site-navigation" class="nav-links" aria-label="Main navigation">
+      {% if request.path.startswith('/admin') and session.get('is_admin') %}
+      <a href="{{ url_for('admin_dashboard') }}" class="nav-link active">Event control</a>
+      <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
+      <a href="{{ url_for('index') }}" class="nav-link">View website ↗</a>
+      <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary btn-sm">Sign out</a>
       {% else %}
-        <a href="/" class="nav-link {{ 'active' if request.path == '/' }}">Home</a>
-        <a href="/#event" class="nav-link">Event</a>
-        <a href="/#format" class="nav-link">Format</a>
-        <a href="/leaderboard" class="nav-link {{ 'active' if request.path == '/leaderboard' }}">Leaderboard</a>
-        {% if session.get('team_id') %}
-          <a href="/result" class="nav-link {{ 'active' if request.path in ['/result','/final-result'] }}">Score</a>
-          <span class="badge badge-primary" title="Signed in team">{{ session.get('team_name') }}</span>
-          <a href="/arena" class="btn btn-primary btn-sm">Enter Arena</a>
-          <a href="/logout" class="btn btn-outline btn-sm">Logout</a>
-        {% else %}
-          <a href="/register" class="btn btn-primary btn-sm">Participant Login</a>
-        {% endif %}
-        {% if session.get('is_admin') %}<a href="/admin/dashboard" class="btn btn-outline btn-sm">Admin &rarr;</a>{% endif %}
+      <a href="{{ url_for('index') }}" class="nav-link {{ 'active' if request.path == '/' else '' }}">Home</a>
+      <a href="{{ url_for('index') }}#event" class="nav-link">Event</a>
+      <a href="{{ url_for('index') }}#format" class="nav-link">Format</a>
+      <a href="{{ url_for('leaderboard') }}" class="nav-link {{ 'active' if request.path == '/leaderboard' else '' }}">Leaderboard</a>
+      {% if session.get('team_id') %}
+      <a href="{{ url_for('arena') }}" class="btn btn-primary btn-sm">Enter arena <span aria-hidden="true">↗</span></a>
+      <a href="{{ url_for('logout') }}" class="nav-link">Sign out</a>
+      {% else %}
+      <a href="{{ url_for('register') }}" class="btn btn-primary btn-sm">Participant login <span aria-hidden="true">↗</span></a>
+      {% endif %}
       {% endif %}
     </nav>
   </header>
-  {% endblock %}
-
-  <main class="page-content">
-    {% block content %}{% endblock %}
-  </main>
-
-  <div id="toast-container" aria-live="polite" role="status"></div>
-
+  <main id="main-content" class="page-content">{% block content %}{% endblock %}</main>
   <footer class="app-footer">
-    <div class="org">IEEE Computer Society Student Branch Chapter</div>
-    <div>Amrita Vishwa Vidyapeetham, Bengaluru &bull; IEEE Week 2026 &bull; 7 October 2026</div>
+    <div><a class="footer-wordmark" href="{{ url_for('index') }}">EXIT CODE <span>0</span></a><p>IEEE Computer Society Student Branch Chapter<br>Amrita Vishwa Vidyapeetham, Bengaluru</p></div>
+    <div class="footer-end"><span class="mono">ANALYSE → DEBUG → FIX → EXIT 0</span><small>IEEE Week 2026 · 7 October 2026</small><a href="{{ url_for('admin_login') }}">Organizer access ↗</a></div>
   </footer>
-
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+  <dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-title">
+    <form method="dialog"><span class="eyebrow">CONFIRM ACTION</span><h2 id="confirm-title">Continue?</h2><p id="confirm-message" class="muted"></p><div class="modal-actions"><button value="cancel" class="btn btn-secondary" autofocus>Cancel</button><button id="confirm-accept" value="confirm" class="btn btn-primary">Confirm</button></div></form>
+  </dialog>
+  <script id="initial-event-state" type="application/json">{{ event_state|tojson }}</script>
+  <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/timer.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/interactions.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='dist/react-bits.js') }}" defer></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

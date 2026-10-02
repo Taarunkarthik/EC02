@@ -1,11 +1,12 @@
 import os
 import json
+import secrets
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY", "exit-code-0-secret-key-ieee-2026")
+    SECRET_KEY = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
     DATABASE_PATH = os.environ.get("DATABASE_PATH", str(BASE_DIR / "database" / "exit_code_0.db"))
     SCHEMA_PATH = str(BASE_DIR / "database" / "schema.sql")
     

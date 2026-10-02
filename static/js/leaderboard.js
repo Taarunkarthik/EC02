@@ -1,77 +1,21 @@
-// Live leaderboard: polls the server; ranks are computed server-side (display + diff animation only).
 (() => {
-  const $ = id => document.getElementById(id);
-  const tbody = $('leaderboard-table-body'); if (!tbody) return;
-  let prev = {}, first = true, remaining = null, running = false;
-  const STATES = { LIVE: ['live', 'LIVE'], COMPLETED: ['final', 'FINAL'], PAUSED: ['frozen', 'PAUSED'], WAITING: ['frozen', 'NOT STARTED'] };
-
-  const td = (text, cls, style) => { const c = document.createElement('td'); c.textContent = text; if (cls) c.className = cls; if (style) c.style.cssText = style; return c; };
-
-  function podium(teams) {
-    const p = $('podium'); p.replaceChildren();
-    const top = teams.slice(0, 3).filter(t => t.score > 0 || t.completed_count > 0);
-    p.hidden = top.length === 0; if (!top.length) return;
-    [1, 0, 2].forEach(i => {   // 2nd | 1st | 3rd
-      const t = top[i]; if (!t) return;
-      const d = document.createElement('div'); d.className = `card pod p${i + 1}`;
-      const m = document.createElement('div'); m.className = 'medal'; m.textContent = ['1ST', '2ND', '3RD'][i];
-      const n = document.createElement('div'); n.className = 'nm'; n.textContent = t.name;
-      const s = document.createElement('div'); s.className = 'sc'; s.textContent = Number(t.score).toFixed(1);
-      d.append(m, n, s); p.appendChild(d);
-    });
-  }
-
-  function render(teams, me) {
-    $('lb-count').textContent = `${teams.length} team${teams.length === 1 ? '' : 's'}`;
-    if (!teams.length) {
-      tbody.innerHTML = '<tr><td colspan="5"><div class="empty"><strong>No teams registered yet.</strong>The leaderboard will appear when the competition begins.</div></td></tr>';
-      $('podium').hidden = true; return;
-    }
-    podium(teams);
-    const next = {}; tbody.replaceChildren();
-    teams.forEach((t, i) => {
-      const rank = i + 1, score = Number(t.score || 0), old = prev[t.id];
-      next[t.id] = { rank, score };
-      const tr = document.createElement('tr'); tr.className = 'lb-row' + (me && t.id === me ? ' me' : '');
-      const rc = td(String(rank).padStart(2, '0'), 'rank-cell');
-      if (!first && old && old.rank !== rank) {
-        const d = document.createElement('span'); d.className = 'delta ' + (rank < old.rank ? 'up' : 'down');
-        d.textContent = (rank < old.rank ? '↑ ' : '↓ ') + Math.abs(old.rank - rank); rc.appendChild(d);
-        setTimeout(() => d.remove(), 6000);
-      }
-      const nm = document.createElement('td'); const b = document.createElement('div'); b.style.fontWeight = '600'; b.textContent = t.name;
-      if (me && t.id === me) { const y = document.createElement('span'); y.className = 'badge badge-primary'; y.style.marginLeft = '.5rem'; y.textContent = 'YOU'; b.appendChild(y); }
-      const id = document.createElement('div'); id.className = 'mono text-dim'; id.style.fontSize = '.72rem'; id.textContent = t.id; nm.append(b, id);
-      const st = document.createElement('td'); st.style.textAlign = 'center';
-      const bd = document.createElement('span'); bd.className = 'badge ' + (t.completed_count > 0 ? 'badge-success' : ''); bd.textContent = t.completed_count > 0 ? 'ACTIVE' : 'NO SUBMISSIONS'; st.appendChild(bd);
-      tr.append(rc, nm, td(t.completed_count || 0, 'mono', 'text-align:center'), td(score.toFixed(1), 'mono font-bold', 'text-align:right;font-size:1rem'), st);
-      if (!first && old && old.score !== score) tr.classList.add('bump');
-      tbody.appendChild(tr);
-    });
-    prev = next; first = false;
-  }
-
-  function setState(status) {
-    const [cls, text] = STATES[status] || STATES.LIVE;
-    $('lb-tag').className = 'live-tag ' + cls; $('lb-tag-text').textContent = text;
-  }
-
-  async function refresh(manual) {
-    const btn = $('lb-refresh'); if (manual) { btn.disabled = true; btn.textContent = 'Refreshing...'; }
-    const { ok, data, network } = await EX0.api('/api/leaderboard-data');
-    if (manual) { btn.disabled = false; btn.textContent = 'Refresh'; }
-    if (!ok) {
-      if (first) tbody.innerHTML = '<tr><td colspan="5"><div class="empty"><strong>Unable to connect to server.</strong>Your progress is safe. Try reconnecting or contact an event volunteer.</div></td></tr>';
-      return;
-    }
-    setState(data.event_status); running = data.event_status === 'LIVE';
-    render(data.leaderboard, data.current_team_id);
-  }
-
-  document.addEventListener('ex0:event', e => {
-    const d = e.detail; remaining = d.remaining_seconds; setState(d.event_status);
-    $('lb-timer-countdown').textContent = d.formatted_time || EX0.fmt(remaining || 0);
-  });
-  $('lb-refresh').addEventListener('click', () => refresh(true));
-  refresh(false); setInterval(refresh, 3000);
+ 'use strict';
+ const byId=id=>document.getElementById(id);let pending=false,previous=new Map(),signature='',movement=new Map();
+ function el(tag,cls,text){const n=document.createElement(tag);n.className=cls||'';if(text!==undefined)n.textContent=text;return n;}
+ function render(data){
+  const mode=data.event_status==='WAITING'?'READY':data.leaderboard_state;byId('lb-mode-text').textContent=mode;byId('lb-mode').dataset.mode=mode;
+  byId('lb-team-count').textContent=`${data.leaderboard.length} registered teams`;byId('lb-updated').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const nextSignature=JSON.stringify([data.leaderboard,data.current_team_id,mode]);if(signature===nextSignature)return;signature=nextSignature;
+  const podium=byId('leaderboard-podium'),body=byId('leaderboard-table-body');podium.replaceChildren();body.replaceChildren();podium.setAttribute('aria-busy','false');
+  if(!data.leaderboard.length){podium.hidden=true;const row=el('tr');const cell=el('td');cell.colSpan=5;const empty=el('div','table-empty');empty.append(el('h3','','The starting grid is open.'),el('p','','No teams registered yet. Standings will appear here as teams join.'));cell.append(empty);row.append(cell);body.append(row);return;}
+  podium.hidden=false;
+  data.leaderboard.forEach((team,i)=>{
+   const rank=i+1,own=team.id===data.current_team_id,old=previous.get(team.id);
+   if(old&&old!==rank)movement.set(team.id,{delta:old-rank,until:performance.now()+8000});
+   if(i<3){const card=el('article',`podium-card podium-${rank}${own?' own-team':''}`);const top=el('div','podium-top');top.append(el('span','eyebrow',rank===1?(mode==='FINAL'?'CHAMPION':'LEADING'):`POSITION ${rank}`),el('span','podium-rank',String(rank).padStart(2,'0')));const score=el('div','podium-score',Number(team.score).toLocaleString());score.append(el('span','','DEBUGGING POINTS'));card.append(top,el('div','podium-avatar',team.name.slice(0,2).toUpperCase()),el('h3','',team.name),el('span','mono muted',team.id),score);if(own)card.append(el('span','podium-own','YOUR TEAM'));podium.append(card);}
+   const row=el('tr',own?'own-team':'');row.dataset.teamId=team.id;if(old!==undefined&&old!==rank)row.classList.add('rank-changed');const rankCell=el('td','rank-cell',String(rank).padStart(2,'0'));const move=movement.get(team.id);if(move&&move.until>performance.now())rankCell.append(el('span',move.delta>0?'rank-movement rank-up':'rank-movement rank-down',`${move.delta>0?'↑':'↓'} ${Math.abs(move.delta)}`));const teamCell=el('td','team-cell');const identity=el('div','');identity.append(el('strong','',team.name),el('small','mono muted',team.id));teamCell.append(identity);if(own)teamCell.append(el('span','badge badge-primary','YOU'));row.append(rankCell,teamCell,el('td','mono',team.completed_count),el('td','score-cell mono',Number(team.score).toLocaleString()));const status=el('td');status.append(el('span','badge',mode==='FINAL'?'FINAL':data.event_status==='COMPLETED'?'LOCKED':data.event_status==='PAUSED'?'PAUSED':team.completed_count?'COMPETING':'READY'));row.append(status);body.append(row);
+  });previous=new Map(data.leaderboard.map((t,i)=>[t.id,i+1]));
+ }
+ async function refresh(){if(pending)return;pending=true;const button=byId('refresh-leaderboard');button.disabled=true;button.classList.add('loading');try{render(await App.request('/api/leaderboard-data'));}catch(err){byId('lb-updated').textContent='Reconnecting…';if(!previous.size){byId('leaderboard-podium').hidden=true;byId('leaderboard-table-body').replaceChildren();const row=el('tr');const cell=el('td','table-empty',err.message+' Use Refresh to retry.');cell.colSpan=5;row.append(cell);byId('leaderboard-table-body').append(row);}}finally{pending=false;button.disabled=false;button.classList.remove('loading');}}
+ byId('refresh-leaderboard').addEventListener('click',refresh);refresh();setInterval(()=>{if(!document.hidden)refresh();document.querySelectorAll('.rank-movement').forEach(n=>{const id=n.closest('tr').dataset.teamId;if((movement.get(id)?.until||0)<performance.now())n.remove();});},5000);
 })();

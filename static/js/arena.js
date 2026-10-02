@@ -1,165 +1,184 @@
-// Debug Arena controller. Display + input only: score, timer, unlocks and grading are all server-side.
+/* Participant state stays server-controlled; only unsent drafts and review flags are local. */
 (() => {
-  const $ = id => document.getElementById(id);
-  const arena = $('arena'); if (!arena) return;
-  const teamId = arena.dataset.teamId;
-  const meta = JSON.parse($('nav-meta').textContent);
-  const first = JSON.parse($('first-q').textContent);
-  const cache = {}; if (first) cache[first.id] = first;
-  const FIELDS = ['error_location', 'error_type', 'expected_output', 'cause', 'correction'];
-  const viewer = $('code-viewer-container');
-  let cur = first ? first.id : null, locked = false, score = parseFloat($('arena-team-score').textContent) || 0;
-  let remaining = null, paused = false, warned = {};
-
-  /* ---------- navigator ---------- */
-  function renderNav() {
-    const g = $('qgrid'); g.replaceChildren();
-    meta.forEach(q => {
-      const b = document.createElement('button'); b.type = 'button'; b.dataset.id = q.id;
-      const st = !q.unlocked ? 'locked' : q.id === cur ? 'current' : q.completed ? 'done' : '';
-      b.className = 'qbtn ' + st;
-      b.setAttribute('aria-current', q.id === cur ? 'true' : 'false');
-      b.disabled = !q.unlocked;
-      b.dataset.tip = `Question ${q.order} · ${q.difficulty} · ${q.points} pts`;
-      const n = document.createElement('span'); n.textContent = String(q.order).padStart(2, '0');
-      const s = document.createElement('small'); s.textContent = !q.unlocked ? '🔒' : q.completed ? '✓' : q.id === cur ? '●' : '○';
-      b.append(n, s); b.addEventListener('click', () => select(q.id, true)); g.appendChild(b);
-    });
-    const done = meta.filter(q => q.completed).length;
-    $('done-count').textContent = done;
-    $('progress-fill').style.width = (meta.length ? done / meta.length * 100 : 0) + '%';
-  }
-
-  /* ---------- drafts (local only; never answer keys) ---------- */
-  const dkey = id => `ex0:draft:${teamId}:${id}`;
-  let draftTimer;
+  'use strict';
+  const fields = ['error_location', 'error_type', 'expected_output', 'cause', 'correction'];
+  let root, form, qid, progress, generation, draftKey, dirty = false, busy = false, switching = false, submitted = false, requestID = null, reviews = {}, saveTimeout, syncPending = false, loadSerial = 0;
+  const byId = id => document.getElementById(id);
+  const canSubmit = () => App.eventState?.event_status === 'LIVE' && Number(App.eventState.remaining_seconds) > 0;
+  const current = () => progress?.questions.find(q => q.id === qid);
+  const value = () => Object.fromEntries(fields.map(name => [name, byId(name).value]));
+  const draftNamespace = () => `ex0:draft:${generation}:${root.dataset.teamId}:`;
+  function setDraftKey() { draftKey = `${draftNamespace()}${qid}`; }
   function saveDraft() {
-    if (!cur) return;
-    const d = {}; FIELDS.forEach(f => d[f] = $(f).value);
-    try {
-      if (FIELDS.some(f => d[f])) localStorage.setItem(dkey(cur), JSON.stringify(d)); else localStorage.removeItem(dkey(cur));
-      const n = $('draft-note'); n.classList.add('show'); setTimeout(() => n.classList.remove('show'), 1400);
-    } catch (_) { /* storage unavailable: ignore */ }
+    if (!dirty || !draftKey || submitted) return;
+    const saved = App.storage.set(draftKey, { ...value(), request_id: requestID, saved_at: Date.now() });
+    byId('draft-status').textContent = saved ? 'Saved locally ✓' : 'Local storage unavailable';
   }
-  function loadDraft() {
-    let d = {}; try { d = JSON.parse(localStorage.getItem(dkey(cur)) || '{}'); } catch (_) {}
-    FIELDS.forEach(f => $(f).value = d[f] || '');
-    CodeViewer.pick(viewer, parseInt($('error_location').value, 10) || 0);
+  function restoreDraft() {
+    setDraftKey();
+    const draft = App.storage.get(draftKey);
+    fields.forEach(name => { byId(name).value = typeof draft?.[name] === 'string' ? draft[name] : ''; byId(name).removeAttribute('aria-invalid'); document.querySelector(`[data-error-for="${name}"]`).textContent = ''; });
+    requestID = draft?.request_id || null; dirty = !!draft; submitted = false;
+    byId('draft-status').textContent = draft ? 'Draft restored from this device' : 'Drafts save on this device';
+    CodeEditor.selectLine(byId('error_location').value, false);
+    byId('form-feedback-alert').hidden = true; byId('next-question').hidden = true; byId('submission-trace').hidden = true;
+    updateReview(); updateControls();
   }
-  FIELDS.forEach(f => $(f).addEventListener('input', () => { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 600); }));
-
-  /* ---------- show a question ---------- */
-  function show(q) {
-    cur = q.id; $('form-question-id').value = q.id;
-    $('file-name').textContent = CodeViewer.fileName(q.language);
-    $('lang-badge').textContent = q.language.toUpperCase(); $('diff-badge').textContent = q.difficulty.toUpperCase(); $('pts-badge').textContent = q.points + ' PTS';
-    const m = meta.find(x => x.id === q.id); $('q-title').textContent = `Q${String(m ? m.order : '').padStart(2, '0')} · ${q.title}`;
-    CodeViewer.render(viewer, q.code, q.language, n => { $('error_location').value = n; CodeViewer.pick(viewer, n); saveDraft(); });
-    $('result-slot').replaceChildren(); $('hint-box').classList.add('hidden');
-    loadDraft(); renderNav();
+  function updateReview() {
+    const reviewed = !!reviews[qid];
+    byId('review-toggle').setAttribute('aria-pressed', String(reviewed));
+    byId('review-toggle').textContent = reviewed ? '⚑ Marked' : '⚑ Review';
+    document.querySelectorAll('[data-question]').forEach(button => {
+      const reviewedQuestion = !!reviews[button.dataset.question];
+      button.classList.toggle('review', reviewedQuestion);
+      if (reviewedQuestion && button.dataset.completed !== '1') button.querySelector('.question-symbol').textContent = '⚑';
+    });
   }
-
-  async function select(id, push) {
-    if (id === cur) return;
-    const m = meta.find(x => x.id === id); if (!m || !m.unlocked) return;
-    saveDraft();
-    let q = cache[id];
-    if (!q) {
-      viewer.replaceChildren(Object.assign(document.createElement('div'), { className: 'skeleton', style: 'height:180px;margin:1rem' }));
-      const { ok, data } = await EX0.api('/api/question/' + encodeURIComponent(id));
-      if (!ok || !data.question) { EX0.toast('Unable to load question. Please retry.', 'error'); if (cache[cur]) show(cache[cur]); return; }
-      q = cache[id] = data.question;
+  function updateControls() {
+    const disabled = !canSubmit() || busy || switching || !qid || !progress;
+    byId('commit-fix-btn').disabled = disabled;
+    byId('commit-fix-btn').classList.toggle('loading', busy);
+    byId('commit-fix-btn').textContent = busy ? 'VALIDATING…' : !canSubmit() ? (App.eventState?.event_status === 'PAUSED' ? 'EVENT PAUSED' : 'SUBMISSIONS CLOSED') : submitted ? 'COMMIT UPDATED FIX →' : '⑂  COMMIT FIX  →';
+    document.querySelectorAll('[data-powerup]').forEach(button => {
+      const key = button.dataset.powerup.toUpperCase().replaceAll('-', '_');
+      const pu = progress?.powerups?.[key];
+      button.disabled = disabled || !!pu?.is_used || !!pu?.is_armed;
+      const label = button.querySelector('[data-powerup-status]');
+      const descriptions = { 'rubber-duck': 'Get a hint · −10% base points', 'git-revert': 'Replace this challenge', 'double-commit': 'Double points or zero' };
+      label.textContent = pu?.is_used ? 'Used' : pu?.is_armed ? 'Armed for next submission' : descriptions[button.dataset.powerup];
+      if (button.dataset.powerup === 'git-revert' && current()?.is_completed) button.disabled = true;
+    });
+    fields.forEach(name => { byId(name).disabled = busy || switching; });
+  }
+  function renderProgress(data) {
+    progress = data;
+    const score = byId('arena-team-score');
+    const newScore = String(data.score);
+    if (score.textContent.trim() !== newScore) { score.textContent = newScore; score.classList.remove('score-changed'); void score.offsetWidth; score.classList.add('score-changed'); }
+    byId('completed-count').textContent = data.completed_count; byId('question-total').textContent = data.total_questions; byId('sidebar-question-total').textContent = data.total_questions;
+    byId('question-progress').value = data.completed_count; byId('question-progress').max = data.total_questions || 1;
+    const list = byId('question-list'); const fragment = document.createDocumentFragment();
+    for (const question of data.questions) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'question-item'; button.dataset.question = question.id; button.dataset.order = question.question_order; button.dataset.completed = question.is_completed ? '1' : '0';
+      button.disabled = !question.is_unlocked; button.classList.toggle('current', question.id === qid); button.classList.toggle('completed', !!question.is_completed);
+      if (question.id === qid) button.setAttribute('aria-current', 'true');
+      button.title = `Question ${question.question_order} · ${question.difficulty} · ${question.points} points`;
+      const number = document.createElement('span'); number.className = 'question-number'; number.textContent = String(question.question_order).padStart(2, '0');
+      const label = document.createElement('span'); label.className = 'question-label'; const language = document.createElement('strong'); language.textContent = question.language; const info = document.createElement('small'); info.textContent = `${question.points} pts · ${question.difficulty}`; label.append(language, info);
+      const symbol = document.createElement('span'); symbol.className = 'question-symbol'; symbol.textContent = question.is_completed ? '✓' : question.id === qid ? '●' : question.is_unlocked ? '○' : '−'; symbol.setAttribute('aria-label', question.is_completed ? 'Submitted' : question.is_unlocked ? 'Available' : 'Locked');
+      button.append(number, label, symbol); fragment.append(button);
     }
-    show(q);
-    if (push) history.pushState({ q: id }, '', '/arena?q=' + encodeURIComponent(id));
+    const scroll = list.scrollTop; list.replaceChildren(fragment); list.scrollTop = scroll; updateReview(); updateControls();
   }
-  window.addEventListener('popstate', e => { const id = (e.state && e.state.q) || new URLSearchParams(location.search).get('q'); if (id) { cur = null; select(id, false); } });
-
-  $('error_location').addEventListener('input', e => CodeViewer.pick(viewer, parseInt(e.target.value, 10) || 0));
-
-  /* ---------- submit ---------- */
-  function lock(msg) {
-    if (locked) return; locked = true;
-    $('bug-fix-form').querySelectorAll('input,select,textarea,button').forEach(el => el.disabled = true);
-    $('commit-label').textContent = 'SUBMISSIONS CLOSED';
-    const a = document.createElement('div'); a.className = 'alert alert-warning'; a.textContent = msg; $('result-slot').replaceChildren(a);
+  async function syncProgress() {
+    if (syncPending) return;
+    syncPending = true;
+    try {
+      const data = await App.request('/api/team-progress');
+      if (generation && data.generation !== generation) { location.replace('/register'); return; }
+      generation = data.generation; renderProgress(data); return data;
+    } catch (err) { if (err.status === 401 || err.status === 403) { byId('arena-state-notice').hidden = false; byId('arena-state-notice').textContent = err.message; progress = null; updateControls(); } }
+    finally { syncPending = false; }
   }
-
-  $('bug-fix-form').addEventListener('submit', async e => {
-    e.preventDefault(); if (locked || !cur) return;
-    const body = { question_id: cur }; FIELDS.forEach(f => body[f] = $(f).value.trim());
-    if (!FIELDS.some(f => body[f])) { EX0.toast('Fill in at least one field before committing.', 'warning'); return; }
-    const btn = $('commit-fix-btn'), label = $('commit-label'); btn.disabled = true; label.textContent = 'VALIDATING...';
-    const { ok, status, data, network } = await EX0.api('/api/submit-bug-fix', { json: body });
-    btn.disabled = false; label.textContent = 'COMMIT FIX';
-
-    if (network) { EX0.toast('Unable to submit. Please retry.', 'error'); return; }
-    if (status === 403) { lock('Submissions are closed.'); return; }
-    if (!ok || !data.success) { EX0.toast('Unable to submit. Please retry.', 'error'); return; }
-
-    const r = data.result, delta = data.new_score - score, m = meta.find(x => x.id === cur);
-    if (m) { m.completed = true; const nx = meta.find(x => x.order === m.order + 1); if (nx) nx.unlocked = true; if (cache[cur]) cache[cur].is_completed = true; }
-    const sc = $('arena-team-score'); EX0.countTo(sc, score, data.new_score); sc.classList.remove('score-flash'); void sc.offsetWidth; sc.classList.add('score-flash'); score = data.new_score;
-    try { localStorage.removeItem(dkey(cur)); } catch (_) {}
-    renderNav();
-
-    const card = document.createElement('div'); card.className = 'card result-card';
-    const t = document.createElement('div'); t.className = 'eyebrow'; t.textContent = '✓ Submission recorded';
-    const p = document.createElement('div'); p.className = 'pts'; p.textContent = delta > 0 ? `+${Math.round(delta * 10) / 10} POINTS` : 'RECORDED';
-    const s = document.createElement('div'); s.className = 'text-muted'; s.style.fontSize = '.85rem'; s.textContent = `Score awarded: ${r.total_score} / ${r.base_points}`;
-    card.append(t, p, s);
-    const next = meta.filter(x => x.unlocked && !x.completed && x.id !== cur).sort((a, b) => a.order - b.order)[0];
-    if (next) { const nb = document.createElement('button'); nb.type = 'button'; nb.className = 'btn btn-primary btn-block'; nb.style.marginTop = '.8rem'; nb.textContent = 'NEXT QUESTION →'; nb.onclick = () => select(next.id, true); card.appendChild(nb); }
-    $('result-slot').replaceChildren(card);
-    EX0.toast('Submission recorded', 'success');
-  });
-
-  /* ---------- power-ups ---------- */
-  const pu = (id, fn) => { const b = $(id); if (b) b.addEventListener('click', fn); };
-  async function usePowerup(path, extra) {
-    const { ok, data, network } = await EX0.api('/api/powerup/' + path, { json: { question_id: cur } });
-    if (network) { EX0.toast('Unable to reach the server. Please retry.', 'error'); return null; }
-    if (!ok || !data.success) { EX0.toast(data.error || 'Power-up unavailable.', 'error'); return null; }
-    EX0.toast(data.message || 'Power-up activated', 'success'); return data;
+  async function selectQuestion(id, push = true) {
+    if (!id || busy || switching || id === qid) return;
+    saveDraft(); switching = true; updateControls();
+    const serial = ++loadSerial;
+    document.querySelector('.arena-workspace').classList.add('is-loading');
+    try {
+      const data = await App.request(`/api/question/${encodeURIComponent(id)}`);
+      if (serial !== loadSerial) return;
+      const q = data.question; qid = q.id; byId('form-question-id').value = qid;
+      byId('breadcrumb-question').textContent = qid; byId('question-title').textContent = q.title; byId('question-difficulty').textContent = q.difficulty; byId('question-points').textContent = `${q.points} PTS`; byId('source-language').textContent = q.language;
+      byId('source-filename').textContent = ({ Python: 'main.py', Java: 'Main.java', C: 'main.c', 'C++': 'main.cpp' })[q.language] || 'source';
+      byId('challenge-number').textContent = `CHALLENGE ${String(current()?.question_order || qid).padStart(2, '0')}`;
+      CodeEditor.render(q.code); restoreDraft(); byId('rubber-duck-hint-box').hidden = true;
+      if (progress) renderProgress(progress);
+      if (push) history.pushState({ question: qid }, '', `/arena?q=${encodeURIComponent(qid)}`);
+      document.title = `${qid} · Debug Arena — EXIT CODE 0`;
+    } catch (err) { App.toast(err.message, 'error'); }
+    finally { switching = false; document.querySelector('.arena-workspace').classList.remove('is-loading'); updateControls(); }
   }
-  const markUsed = (id, text = 'USED') => { const b = $(id); if (b) b.replaceWith(Object.assign(document.createElement('span'), { className: 'badge badge-muted', textContent: text })); };
-  pu('pu-duck', async () => {
-    if (!await EX0.confirm('Use Rubber Duck?', 'A hint is revealed and 10% of this question\'s points are deducted.', 'Use hint')) return;
-    const d = await usePowerup('rubber-duck'); if (!d) return;
-    const h = $('hint-box'); h.textContent = d.hint || ''; h.classList.remove('hidden'); markUsed('pu-duck');
-  });
-  pu('pu-revert', async () => {
-    if (!await EX0.confirm('Use Git Revert?', 'This question is abandoned and swapped for another. It cannot be attempted again.', 'Swap question', true)) return;
-    const d = await usePowerup('git-revert'); if (!d) return;
-    setTimeout(() => location.href = '/arena' + (d.new_question_id ? '?q=' + encodeURIComponent(d.new_question_id) : ''), 700);
-  });
-  pu('pu-double', async () => {
-    if (!await EX0.confirm('Arm Double Commit?', 'Your next submission on this question earns 2× points if it is at least 60% accurate, otherwise 0.', 'Arm')) return;
-    const d = await usePowerup('double-commit'); if (d) { const b = $('pu-double'); b.replaceWith(Object.assign(document.createElement('span'), { className: 'badge badge-primary', textContent: 'ARMED' })); }
-  });
-
-  /* ---------- timer: server value is authoritative; local tick only smooths display ---------- */
-  function renderTimer() {
-    const v = $('event-timer-display'), box = $('timer-box');
-    if (remaining === null) return;
-    v.textContent = paused ? 'PAUSED' : EX0.fmt(Math.max(0, remaining));
-    box.classList.remove('warn10', 'warn5', 'warn1'); box.classList.toggle('paused', paused);
-    if (paused) return;
-    const cls = remaining <= 60 ? 'warn1' : remaining <= 300 ? 'warn5' : remaining <= 600 ? 'warn10' : '';
-    if (cls) box.classList.add(cls);
-    [[600, '10 minutes remaining'], [300, '5 minutes remaining'], [60, '1 minute remaining']].forEach(([t, m]) => { if (remaining <= t && remaining > t - 5 && !warned[t]) { warned[t] = 1; EX0.toast(m, 'warning'); } });
+  function validate() {
+    let firstInvalid;
+    for (const name of fields) {
+      const input = byId(name); const invalid = !input.value.trim() || !input.validity.valid;
+      input.setAttribute('aria-invalid', String(invalid));
+      document.querySelector(`[data-error-for="${name}"]`).textContent = invalid ? name === 'error_location' ? 'Choose a line in the source.' : 'This field is required.' : '';
+      if (invalid && !firstInvalid) firstInvalid = input;
+    }
+    firstInvalid?.focus(); return !firstInvalid;
   }
-  function expire() { lock('Time is up. Submissions are closed.'); setTimeout(() => location.href = '/result', 3000); }
-  setInterval(() => { if (remaining === null || paused || locked) return; if (remaining > 0) { remaining--; renderTimer(); } else expire(); }, 1000);
-  document.addEventListener('ex0:event', ev => {
-    const d = ev.detail; paused = !!d.is_paused || d.event_status === 'PAUSED';
-    if (typeof d.remaining_seconds === 'number') remaining = d.remaining_seconds;
-    renderTimer();
-    if (d.event_status === 'COMPLETED' || (remaining !== null && remaining <= 0 && d.event_status === 'LIVE')) expire();
-  });
-
-  /* ---------- boot ---------- */
-  renderNav();
-  if (first) show(first); else $('q-title').textContent = 'No question available';
-  ArenaGuard.init({});
+  async function submit(event) {
+    event.preventDefault(); if (busy || !canSubmit() || !validate()) return;
+    busy = true; submitted = false;
+    requestID ||= (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    dirty = true; saveDraft(); updateControls();
+    const activity = App.activity(byId('submission-trace'), 'Waiting for server validation…');
+    try {
+      const data = await App.request('/api/submit-bug-fix', { method: 'POST', body: { question_id: qid, request_id: requestID, ...value() } });
+      activity.finish(true, 'Submission recorded');
+      submitted = true; dirty = false; App.storage.remove(draftKey); requestID = null;
+      const alert = byId('form-feedback-alert'); alert.hidden = false; alert.className = 'alert alert-success'; alert.textContent = `Submission recorded. Score awarded: ${data.result.total_score} / ${data.result.base_points} base points${data.result.is_double_commit ? ' · Double Commit applied' : ''}. Your best score is retained.`;
+      byId('draft-status').textContent = 'Submission saved to server ✓';
+      byId('arena-team-score').textContent = data.new_score;
+      byId('arena-team-score').classList.add('score-changed');
+      App.toast('Submission recorded.', 'success');
+      await syncProgress();
+      const next = progress?.questions.find(q => q.is_unlocked && !q.is_completed && q.id !== qid);
+      byId('next-question').hidden = !next; byId('next-question').dataset.next = next?.id || '';
+      alert.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest' });
+    } catch (err) {
+      activity.finish(false, 'Submission not confirmed');
+      const alert = byId('form-feedback-alert'); alert.hidden = false; alert.className = 'alert alert-warning'; alert.textContent = err.message;
+      if (!err.offline && err.status < 500) requestID = null;
+      App.toast(err.message, 'error'); EventClock.sync();
+    } finally { busy = false; updateControls(); }
+  }
+  async function usePowerup(button) {
+    if (busy || !canSubmit()) return;
+    const type = button.dataset.powerup;
+    const descriptions = { 'rubber-duck': ['Use Rubber Duck?', 'Reveal one hint. This deducts 10% of the base points from this challenge’s scored submission.'], 'git-revert': ['Replace this challenge?', 'Git Revert abandons this challenge permanently and assigns an alternative. You can use it once.'], 'double-commit': ['Arm Double Commit?', 'Your next submission scores 2× if it earns at least 60% accuracy; otherwise it scores zero. You can use this once.'] };
+    if (!await App.confirm(descriptions[type][1], { title: descriptions[type][0], confirmText: 'Activate' })) return;
+    busy = true; updateControls(); button.classList.add('loading');
+    try {
+      const data = await App.request(`/api/powerup/${type}`, { method: 'POST', body: { question_id: qid } });
+      App.toast(data.message, 'success');
+      if (data.hint) { byId('rubber-duck-hint-box').textContent = data.hint; byId('rubber-duck-hint-box').hidden = false; }
+      await syncProgress();
+      if (data.new_question_id) { busy = false; dirty = false; App.storage.remove(draftKey); await selectQuestion(data.new_question_id); }
+    } catch (err) { App.toast(err.message, 'error'); }
+    finally { busy = false; button.classList.remove('loading'); updateControls(); }
+  }
+  function onState(state) {
+    if (!root) return;
+    const notice = byId('arena-state-notice');
+    if (state.event_status === 'PAUSED') { notice.hidden = false; notice.textContent = 'Competition paused by the organizers. Your draft is saved; submissions will resume with the event.'; }
+    else if (state.event_status === 'COMPLETED') { saveDraft(); notice.hidden = false; notice.textContent = 'Debugging complete. Submissions are locked. Opening your results…'; setTimeout(() => location.replace('/result'), 1400); }
+    else if (state.event_status === 'WAITING') { saveDraft(); location.replace('/waiting'); }
+    else notice.hidden = true;
+    updateControls();
+  }
+  async function init() {
+    root = byId('arena'); if (!root) return;
+    form = byId('bug-fix-form'); qid = byId('form-question-id').value;
+    if (qid) history.replaceState({ question: qid }, '', `/arena?q=${encodeURIComponent(qid)}`);
+    form.addEventListener('submit', submit);
+    form.addEventListener('input', () => { dirty = true; submitted = false; requestID = null; byId('draft-status').textContent = 'Saving draft…'; clearTimeout(saveTimeout); saveTimeout = setTimeout(saveDraft, 350); updateControls(); });
+    form.addEventListener('paste', event => { event.preventDefault(); App.toast('Pasting answers is restricted in competition mode.', 'warning'); });
+    byId('question-list').addEventListener('click', event => { const button = event.target.closest('[data-question]'); if (button && !button.disabled) selectQuestion(button.dataset.question); });
+    byId('next-question').addEventListener('click', () => selectQuestion(byId('next-question').dataset.next));
+    byId('review-toggle').addEventListener('click', () => { reviews[qid] = !reviews[qid]; App.storage.set(`${draftNamespace()}reviews`, reviews); if (progress) renderProgress(progress); else updateReview(); });
+    document.querySelectorAll('[data-powerup]').forEach(button => button.addEventListener('click', () => usePowerup(button)));
+    document.addEventListener('eventstate', event => onState(event.detail));
+    window.addEventListener('pagehide', saveDraft);
+    window.addEventListener('popstate', () => { const target = new URLSearchParams(location.search).get('q') || progress?.questions.find(q => q.is_unlocked && !q.is_completed)?.id || progress?.questions[0]?.id; selectQuestion(target, false); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) saveDraft(); else syncProgress(); });
+    const data = await syncProgress();
+    if (data) { reviews = App.storage.get(`${draftNamespace()}reviews`, {}); restoreDraft(); }
+    else { byId('draft-status').textContent = 'Reconnect to enable saved drafts'; }
+    if (App.eventState) onState(App.eventState);
+    setInterval(async () => { if (!document.hidden) { const first = !generation; const data = await syncProgress(); if (first && data) { reviews = App.storage.get(`${draftNamespace()}reviews`, {}); if (dirty) { setDraftKey(); saveDraft(); } else restoreDraft(); } } }, 10000);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

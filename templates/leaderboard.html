@@ -1,31 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Live Leaderboard — EXIT CODE 0{% endblock %}
-
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='css/public.css') }}">{% endblock %}
 {% block content %}
-<div class="lb">
-  <div class="lb-head">
-    <div>
-      <div class="eyebrow">Ranked by score &rarr; questions completed &rarr; earliest submission</div>
-      <h1>LIVE LEADERBOARD <span class="live-tag live" id="lb-tag"><span class="pulse-dot"></span><span id="lb-tag-text">LIVE</span></span></h1>
-    </div>
-    <div class="timebox"><div class="eyebrow">Time remaining</div><div class="t" id="lb-timer-countdown">{{ event_state.formatted_time }}</div></div>
-  </div>
-
-  <div class="podium" id="podium" hidden></div>
-
-  <div class="card" style="overflow:hidden">
-    <div class="card-header"><span class="mono" style="font-size:.78rem" id="lb-count">Standings</span>
-      <button type="button" class="btn btn-outline btn-sm" id="lb-refresh">Refresh</button></div>
-    <div class="table-container">
-      <table class="data-table">
-        <thead><tr><th style="width:90px">Rank</th><th>Team</th><th style="text-align:center">Completed</th><th style="text-align:right">Score</th><th style="text-align:center;width:130px">Status</th></tr></thead>
-        <tbody id="leaderboard-table-body">
-          {% for i in range(5) %}<tr><td colspan="5"><div class="skeleton" style="height:1.1rem"></div></td></tr>{% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+<div class="page-shell leaderboard-shell">
+  <header class="public-page-heading"><div><p class="eyebrow">THE COMPETITION, IN REAL TIME</p><h1>Live leaderboard<span class="heading-period">.</span></h1><p>Every fix moves the needle. Follow the debugging standings.</p></div><div class="leaderboard-live-tools"><span class="badge" id="lb-mode"><span class="blue-dot"></span><span id="lb-mode-text">{{ 'FROZEN' if event_state.event_status == 'PAUSED' else 'LIVE' }}</span></span><div class="leaderboard-timer"><span class="eyebrow">TIME REMAINING</span><strong data-event-timer id="lb-timer-countdown">{{ event_state.formatted_time }}</strong></div></div></header>
+  <div class="leaderboard-notice" id="lb-notice" role="status">Ranked by debugging score, then completed questions, then earliest qualifying submission. Quiz scores never affect these rankings.</div>
+  <section class="podium-grid" id="leaderboard-podium" aria-label="Top three teams" aria-busy="true"><div class="podium-skeleton"></div><div class="podium-skeleton"></div><div class="podium-skeleton"></div></section>
+  <section class="card standings-card" aria-labelledby="standings-heading"><div class="standings-toolbar"><div><h2 id="standings-heading">All teams</h2><span class="muted" id="lb-team-count">Loading standings…</span></div><div><span id="lb-updated" class="muted" aria-live="polite"></span><button type="button" id="refresh-leaderboard" class="btn btn-secondary"><span aria-hidden="true">↻</span> Refresh</button></div></div><div class="table-scroll"><table class="standings-table"><thead><tr><th scope="col">Rank</th><th scope="col">Team</th><th scope="col">Completed</th><th scope="col">Score</th><th scope="col">Status</th></tr></thead><tbody id="leaderboard-table-body"><tr><td colspan="5"><div class="table-empty"><span class="loading-spinner" aria-hidden="true"></span><p>Loading the latest standings…</p></div></td></tr></tbody></table></div><p class="standings-footnote"><span class="blue-dot"></span> Scores refresh automatically. Official winners appear after organizer verification.</p></section>
 </div>
 {% endblock %}
-
-{% block scripts %}<script src="{{ url_for('static', filename='js/leaderboard.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/leaderboard.js') }}" defer></script>{% endblock %}

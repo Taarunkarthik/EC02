@@ -1,5 +1,16 @@
-import sys
+"""Always isolate destructive test fixtures from the live competition database."""
 import os
+import sys
+import tempfile
+from pathlib import Path
 
-# Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+# Set before test modules import app/Config. Ignore DATABASE_PATH deliberately:
+# existing fixtures call init_db(force_reset=True), including when pytest is run
+# from a deployment shell that points DATABASE_PATH at real participant data.
+_test_database_directory = tempfile.TemporaryDirectory(prefix="exitcode-pytest-")
+os.environ["DATABASE_PATH"] = str(Path(_test_database_directory.name) / "competition.db")
+
+
+def pytest_sessionfinish(session, exitstatus):
+    _test_database_directory.cleanup()

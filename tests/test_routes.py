@@ -1,4 +1,5 @@
 import pytest
+import re
 from app import app
 from database import init_db, get_db_connection, register_team
 from event_manager import reset_event_data, start_event, end_event
@@ -19,13 +20,13 @@ def test_landing_page(client):
     assert b"EXIT CODE" in res.data
     assert b"IEEE Computer Society" in res.data
     assert b"7 October 2026" in res.data
-    assert b"70 MINUTES" in res.data
-    assert b"ENTER THE ARENA" in res.data
+    assert "70 minutes" in re.sub(r"<[^>]+>", "", res.get_data(as_text=True)).lower()
+    assert b"enter the arena" in res.data.lower()
 
 def test_admin_login(client):
     # 1. Unauthenticated access to admin dashboard redirects to admin login
     res_unauth = client.get("/admin/dashboard", follow_redirects=True)
-    assert b"Admin Username" in res_unauth.data or b"ADMIN SECURITY" in res_unauth.data
+    assert b"username" in res_unauth.data.lower() and b"password" in res_unauth.data.lower()
 
     # 2. Invalid credentials fail
     res_bad = client.post("/admin/login", data={
@@ -40,7 +41,7 @@ def test_admin_login(client):
         "password": Config.ADMIN_PASSWORD
     }, follow_redirects=True)
     assert res_good.status_code == 200
-    assert b"TOURNAMENT CONTROL CENTER" in res_good.data or b"ADMIN CONTROL" in res_good.data
+    assert b"event control" in res_good.data.lower()
 
 def test_leaderboard(client):
     # Register two teams
@@ -96,10 +97,10 @@ def test_result_page(client):
     res = client.get("/result")
     assert res.status_code == 200
     assert b"EXIT CODE 0" in res.data
-    assert b"DEBUGGING CHALLENGE COMPLETE" in res.data
+    assert b"debugging complete" in res.data.lower()
     assert b"VictorTeam" in res.data
-    assert b"PROCESS COMPLETED" in res.data
-    assert b"WINNERS" in res.data
+    assert b"process completed" in res.data.lower()
+    assert b"winners" in res.data.lower() or b"verification" in res.data.lower()
 
 def test_admin_score_override(client):
     tid, _ = register_team("OverrideTeam", "M1", "M2")

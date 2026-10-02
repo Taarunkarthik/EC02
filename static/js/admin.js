@@ -1,215 +1,351 @@
-// EXIT CODE 0 — Admin Dashboard Operations
-
-document.addEventListener('DOMContentLoaded', () => {
-  initAdminTelemetrySync();
-});
-
-// Real-Time Telemetry Sync on Admin Console
-function initAdminTelemetrySync() {
-  async function sync() {
-    try {
-      const res = await fetch('/api/event-status');
-      if (res.ok) {
-        const data = await res.json();
-        const statusEl = document.getElementById('admin-telemetry-status');
-        const timerEl = document.getElementById('admin-telemetry-timer');
-        const teamsEl = document.getElementById('admin-telemetry-teams');
-
-        if (statusEl && data.event_status) {
-          statusEl.innerHTML = `<span class="pulse-dot"></span> ${data.event_status}`;
-        }
-        if (timerEl && data.formatted_time) {
-          timerEl.textContent = data.formatted_time;
-        }
-        if (teamsEl && data.connected_teams !== undefined) {
-          teamsEl.textContent = data.connected_teams;
-        }
-      }
-    } catch (e) {
-      console.warn("Admin telemetry sync error:", e);
-    }
-  }
-
-  setInterval(sync, 3000);
-}
-
-// Event Lifecycle Controls (Section 26)
-async function adminEventAction(action) {
-  const confirmMap = {
-    start: "Start the 70-minute debugging competition? All registered teams will gain access to the arena.",
-    pause: "Pause the tournament? The 70-minute timer will freeze and remaining time will be preserved.",
-    resume: "Resume the tournament from paused state?",
-    end: "End the tournament immediately? All submissions will be locked."
+/* EXIT CODE 0 — organizer controls. Server state is always authoritative. */
+(() => {
+  'use strict';
+  const workspace = document.getElementById('admin-workspace');
+  if (!workspace) return;
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const panels = {
+    overview: ['Overview', 'Competition overview', 'Your event, at a glance. Every signal in one place.'],
+    controls: ['Event control', 'Run the competition', 'Start, pause, resume and close the debugging round.'],
+    teams: ['Teams', 'The starting grid', 'Registered teams, participation status and debugging progress.'],
+    questions: ['Questions', 'The challenge library', 'Review the question bank and manage availability.'],
+    submissions: ['Submissions', 'Every fix, accounted for', 'Inspect answers, review scoring and record judging decisions.'],
+    rankings: ['Leaderboard', 'The official standings', 'Review debugging scores and publish the final results.'],
+    quiz: ['Quiz', 'Keep the room thinking', 'A separate rapid-fire round while judges verify the results.'],
+    security: ['Security', 'A clearer view of activity', 'Browser activity signals for informed organizer review.'],
+    settings: ['Settings', 'Event settings', 'Competition configuration, exports and data management.']
   };
-
-  const confirmMsg = confirmMap[action] || `Execute action '${action}'?`;
-  if (!confirm(confirmMsg)) return;
-
-  try {
-    const res = await fetch('/api/admin/event-action', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: action })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast(data.message, 'info');
-      setTimeout(() => window.location.reload(), 800);
-    } else {
-      showToast(data.error || 'Action failed.', 'error');
-    }
-  } catch (err) {
-    showToast('Network error executing admin action.', 'error');
+  let state = { event_status: workspace.dataset.eventStatus };
+  let dashboard = null;
+  let requestInFlight = false;
+  let actionInFlight = false;
+  let activitySignature = '';
+  let leaderboardSignature = '';
+  let currentPanel = 'overview';
+  let countdownAnchor = performance.now();
+  let countdownSeconds = 0;
+  let initialStats = null;
+  let pollHandle;
+  const formatNumber = value => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
+  const request = (url, options = {}) => window.App.request(url, options);
+  const post = (url, body) => request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const toast = (message, type = 'success') => window.App.toast(message, type);
+  const parseDate = value => {
+    if (!value) return null;
+    const normalized = value.replace(' ', 'T');
+    const date = new Date(/(?:Z|[+-]\d\d:\d\d)$/.test(normalized) ? normalized : `${normalized}Z`);
+    return Number.isNaN(date.valueOf()) ? null : date;
+  };
+  const timeText = value => parseDate(value)?.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) || '—';
+  const relativeTime = value => {
+    const date = parseDate(value);
+    if (!date) return 'No activity yet';
+    const seconds = Math.max(0, Math.floor((Date.now() - date.valueOf()) / 1000));
+    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+  function element(tag, className, text) {
+    const item = document.createElement(tag);
+    if (className) item.className = className;
+    if (text !== undefined) item.textContent = String(text);
+    return item;
   }
-}
-
-// Teams Filter
-function filterTeamsTable() {
-  const query = (document.getElementById('team-search-input')?.value || '').toLowerCase().trim();
-  const rows = document.querySelectorAll('.team-row');
-
-  rows.forEach(r => {
-    const name = r.dataset.name || '';
-    const members = r.dataset.members || '';
-    const id = r.dataset.id || '';
-    if (name.includes(query) || members.includes(query) || id.includes(query)) {
-      r.style.display = '';
+  function setText(selector, value) { const item = $(selector); if (item) item.textContent = value; }
+  function setConnected(connected) {
+    $('.admin-sync').classList.toggle('is-offline', !connected);
+    setText('#admin-sync-label', connected ? 'Synced with server' : 'Reconnecting…');
+    window.App.setConnection(connected);
+  }
+  function showPanel() {
+    const name = location.hash.slice(1);
+    currentPanel = panels[name] ? name : 'overview';
+    const [label, title, description] = panels[currentPanel];
+    $$('.admin-panel').forEach(panel => { panel.hidden = panel.id !== currentPanel; });
+    $$('.admin-nav a').forEach(link => {
+      const active = link.dataset.panel === currentPanel;
+      link.classList.toggle('active', active);
+      if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+    });
+    setText('#admin-current-panel', label);
+    $('#admin-page-title').replaceChildren(document.createTextNode(title), element('span', 'admin-title-dot', '.'));
+    setText('#admin-page-description', description);
+    if (currentPanel === 'rankings') refreshLeaderboard();
+  }
+  function setBusy(button, busy, label) {
+    if (!button) return;
+    if (busy) {
+      button.dataset.originalLabel = button.textContent;
+      button.textContent = label || 'Saving…';
+      button.disabled = true;
+      button.classList.add('loading');
+      button.setAttribute('aria-busy', 'true');
     } else {
-      r.style.display = 'none';
+      button.textContent = button.dataset.originalLabel || button.textContent;
+      button.disabled = false;
+      button.classList.remove('loading');
+      button.removeAttribute('aria-busy');
     }
+  }
+  function updateTimer() {
+    const elapsed = state.event_status === 'LIVE' ? Math.floor((performance.now() - countdownAnchor) / 1000) : 0;
+    const seconds = Math.max(0, countdownSeconds - elapsed);
+    setText('#admin-telemetry-timer', `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`);
+  }
+  function updateState(next) {
+    if (!next?.event_status) return;
+    state = next;
+    workspace.dataset.eventStatus = state.event_status;
+    $$('[data-event-status-text]').forEach(item => { item.textContent = state.event_status; });
+    if (Number.isFinite(Number(next.remaining_seconds))) {
+      countdownSeconds = Number(next.remaining_seconds);
+      countdownAnchor = performance.now();
+      updateTimer();
+    }
+    const allowed = { start: ['WAITING'], pause: ['LIVE'], resume: ['PAUSED'], end: ['LIVE', 'PAUSED'] };
+    $$('[data-event-action]').forEach(button => { button.disabled = actionInFlight || !allowed[button.dataset.eventAction].includes(state.event_status); });
+    const notes = {
+      WAITING: 'Ready when you are. Starting opens the arena for all eligible teams.',
+      LIVE: 'The debugging round is live. Teams can submit until the server timer expires.',
+      PAUSED: 'The clock is paused. Existing progress is preserved; submissions are temporarily locked.',
+      COMPLETED: 'Debugging is complete. Submissions are locked and results are ready for verification.'
+    };
+    setText('#admin-control-note', notes[state.event_status] || 'Reading event state…');
+    setText('#admin-state-description', ({ WAITING: 'Ready for the starting signal', LIVE: 'Debugging round in progress', PAUSED: 'Clock and submissions paused', COMPLETED: 'Debugging submissions locked' })[state.event_status] || 'Server-authoritative state');
+    updateRoundControls();
+  }
+  function updateRoundControls() {
+    if (!dashboard) return;
+    const quiz = dashboard.quiz || {};
+    const completed = state.event_status === 'COMPLETED';
+    setText('#admin-quiz-status', quiz.status || 'WAITING');
+    setText('#admin-quiz-participants', formatNumber(quiz.participants));
+    setText('#admin-quiz-completed', formatNumber(quiz.completed));
+    $$('[data-quiz-action]').forEach(button => {
+      const open = button.dataset.quizAction === 'open';
+      button.disabled = actionInFlight || !completed || (open ? quiz.status !== 'WAITING' : quiz.status !== 'OPEN');
+    });
+    setText('#admin-quiz-note', quiz.status === 'OPEN'
+      ? `The quiz is open. ${quiz.question_count || 10} questions · ${quiz.duration_minutes || 10} minutes per team. Debugging scores stay unchanged.`
+      : quiz.status === 'CLOSED' ? 'The quiz is closed. Completed quiz scores remain separate from the debugging rankings.'
+      : completed ? 'Debugging has ended. You can now open the engagement quiz.' : 'The quiz becomes available after debugging ends.');
+    const publish = $('#admin-publish-results');
+    publish.disabled = actionInFlight || !completed || dashboard.results_published;
+    if (!publish.hasAttribute('aria-busy')) publish.textContent = dashboard.results_published ? 'Results published ✓' : 'Publish final results';
+    setText('#admin-publish-description', dashboard.results_published
+      ? 'Final debugging results are visible to every team. Quiz scores are excluded from these rankings.'
+      : completed ? 'Review scoring adjustments, then publish the final debugging rankings to all teams.'
+      : 'End the debugging round, verify scores, then publish the final rankings.');
+  }
+  function updateStats(stats) {
+    if (!initialStats) initialStats = { registered_teams: stats.registered_teams, total_submissions: stats.total_submissions };
+    $$('[data-stat]').forEach(item => {
+      const key = item.dataset.stat;
+      if (stats[key] === undefined) return;
+      const value = key === 'average_score' ? Number(stats[key]).toFixed(1) : formatNumber(stats[key]);
+      if (item.textContent !== value) {
+        item.textContent = value;
+        item.classList.remove('admin-stat-updated');
+        void item.offsetWidth;
+        item.classList.add('admin-stat-updated');
+      }
+    });
+    const changed = stats.registered_teams !== initialStats.registered_teams || stats.total_submissions !== initialStats.total_submissions;
+    const notice = $('#admin-records-notice');
+    if (notice) notice.hidden = !changed;
+  }
+  function updateActivity(events) {
+    const signature = JSON.stringify(events);
+    if (signature === activitySignature) return;
+    activitySignature = signature;
+    const feed = $('#admin-activity-feed');
+    if (!events.length) {
+      const empty = element('div', 'admin-empty');
+      empty.append(element('span', 'admin-empty-symbol', '↳'), element('h3', '', 'Ready for the first signal.'), element('p', '', 'Submissions and participant activity will appear here during the competition.'));
+      feed.replaceChildren(empty);
+      return;
+    }
+    const labels = { submission: 'submitted', fullscreen_exit: 'exited fullscreen', fullscreen_enter: 'entered fullscreen', tab_hidden: 'switched away from the arena', window_blur: 'moved focus away', window_focus: 'returned to the arena', window_visible: 'returned to the arena', tab_visible: 'returned to the arena' };
+    const rows = events.slice(0, 20).map(event => {
+      const row = element('div', 'admin-activity-item');
+      row.dataset.eventType = event.event_type;
+      const description = element('p');
+      description.append(element('strong', '', event.team_name || 'Team'), document.createTextNode(` ${labels[event.event_type] || event.event_type.replaceAll('_', ' ')}${event.question_id ? ` ${event.question_id}` : ''}`));
+      const time = element('time', '', timeText(event.created_at));
+      time.title = parseDate(event.created_at)?.toLocaleString() || '';
+      row.append(element('span', 'admin-activity-dot'), description, time);
+      return row;
+    });
+    feed.replaceChildren(...rows);
+  }
+  function updateSecurity(teams) {
+    const target = $('#admin-security-body');
+    if (!teams.length) {
+      const row = element('tr'); row.append(element('td', 'admin-table-empty', 'Activity signals will appear here after teams register.')); row.firstChild.colSpan = 6;
+      target.replaceChildren(row); return;
+    }
+    const rows = teams.map(team => {
+      const row = element('tr');
+      const identity = element('td'); identity.append(element('strong', '', team.team_name), element('small', '', team.team_id));
+      const focus = Number(team.focus_losses || 0), tabs = Number(team.tab_switches || 0), fullscreen = Number(team.fullscreen_exits || 0);
+      const activity = element('td', '', relativeTime(team.last_seen));
+      activity.title = parseDate(team.last_seen)?.toLocaleString() || 'No activity reported';
+      const status = element('td');
+      const hasSignals = focus + tabs + fullscreen > 0;
+      status.append(element('span', `badge ${hasSignals ? 'admin-badge-warning' : 'admin-badge-muted'}`, hasSignals ? 'Review signals' : 'No flags'));
+      row.append(identity, element('td', 'mono', focus), element('td', 'mono', tabs), element('td', 'mono', fullscreen), activity, status);
+      return row;
+    });
+    target.replaceChildren(...rows);
+  }
+  async function refreshLeaderboard() {
+    try {
+      const data = await request('/api/leaderboard-data');
+      const teams = data.leaderboard || [];
+      const signature = JSON.stringify(teams);
+      if (signature === leaderboardSignature) return;
+      leaderboardSignature = signature;
+      const target = $('#admin-leaderboard-body');
+      if (!teams.length) {
+        const row = element('tr'); row.append(element('td', 'admin-table-empty', 'No eligible teams have registered yet.')); row.firstChild.colSpan = 4; target.replaceChildren(row); return;
+      }
+      target.replaceChildren(...teams.map((team, index) => {
+        const row = element('tr');
+        const name = element('td'); name.append(element('strong', '', team.name), element('small', '', team.id));
+        row.append(element('td', 'mono', `#${team.rank || index + 1}`), name, element('td', 'mono', team.completed_count), element('td', 'admin-score', formatNumber(team.debug_score ?? team.score)));
+        return row;
+      }));
+    } catch (error) { setConnected(false); }
+  }
+  async function refreshDashboard() {
+    if (requestInFlight || document.hidden) return;
+    requestInFlight = true;
+    try {
+      dashboard = await request('/api/admin/dashboard-data');
+      updateStats(dashboard.stats || {});
+      updateState(dashboard.event_state);
+      updateActivity(dashboard.activity || []);
+      updateSecurity(dashboard.security || []);
+      updateRoundControls();
+      setConnected(true);
+      if (currentPanel === 'rankings') await refreshLeaderboard();
+    } catch (error) {
+      setConnected(false);
+      if (!dashboard) {
+        setText('#admin-control-note', 'Unable to sync. Controls will be enabled after a successful server connection.');
+        $$('[data-event-action]').forEach(button => { button.disabled = true; });
+      }
+    } finally { requestInFlight = false; }
+  }
+  async function performAction(button, url, body, loadingLabel, shouldReload = false) {
+    if (actionInFlight) return;
+    actionInFlight = true;
+    setBusy(button, true, loadingLabel);
+    updateState(state);
+    try {
+      const result = await post(url, body);
+      if (result.success === false) throw new Error(result.error || 'The action could not be completed.');
+      toast(result.message || 'Changes saved.');
+      if (shouldReload) { location.reload(); return; }
+      await refreshDashboard();
+    } catch (error) { toast(error.message || 'Unable to save. Please try again.', 'error'); }
+    finally { actionInFlight = false; setBusy(button, false); updateState(state); }
+  }
+  function bindFilters(inputId, rowSelector, emptyId, countId) {
+    $(inputId)?.addEventListener('input', event => {
+      const query = event.target.value.trim().toLowerCase();
+      const rows = $$(rowSelector);
+      let count = 0;
+      rows.forEach(row => { row.hidden = !row.dataset.search.includes(query); if (!row.hidden) count++; });
+      $(emptyId).hidden = count !== 0 || !rows.length;
+      if (countId) setText(countId, `${count} ${count === 1 ? 'team' : 'teams'}`);
+    });
+  }
+  function openDetail(templateId) {
+    const template = document.getElementById(templateId);
+    if (!template) return;
+    $('#admin-detail-content').replaceChildren(template.content.cloneNode(true));
+    $('#admin-detail-dialog').showModal();
+  }
+  $$('[data-event-action]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const action = button.dataset.eventAction;
+      const confirmations = {
+        start: ['Start the debugging round?', `The ${state.duration_minutes || 70}-minute server timer will begin immediately and eligible teams will enter the arena.`, 'Start event'],
+        pause: ['Pause the competition?', 'The clock will stop and submissions will be temporarily locked. Remaining time is preserved.', 'Pause event'],
+        resume: ['Resume the competition?', 'The timer will continue from its remaining time and teams can submit again.', 'Resume event'],
+        end: ['End the debugging round?', 'This closes all debugging submissions immediately. The round cannot be resumed after ending.', 'End event']
+      };
+      const [title, message, confirmText] = confirmations[action];
+      if (!await window.App.confirm(message, { title, confirmText, danger: action === 'end' })) return;
+      await performAction(button, '/api/admin/event-action', { action }, ({ start: 'Starting…', pause: 'Pausing…', resume: 'Resuming…', end: 'Ending…' })[action]);
+    });
   });
-}
-
-// Toggle Team Active State
-async function toggleTeamStatus(teamId) {
-  if (!confirm(`Toggle active status for team ${teamId}?`)) return;
-
-  try {
-    const res = await fetch('/api/admin/toggle-team', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ team_id: teamId })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast(data.message, 'info');
-      setTimeout(() => window.location.reload(), 600);
-    } else {
-      showToast(data.error || 'Failed to toggle team.', 'error');
+  $$('[data-team-toggle]').forEach(button => button.addEventListener('click', async () => {
+    const disable = button.dataset.active === '1';
+    const verb = disable ? 'Disable' : 'Enable';
+    if (!await window.App.confirm(`${verb} ${button.dataset.teamName}? ${disable ? 'Their competition access will be blocked and they will be excluded from the public rankings. Existing submissions are retained.' : 'Their competition access and public ranking eligibility will be restored.'}`, { title: `${verb} team`, confirmText: `${verb} team`, danger: disable })) return;
+    await performAction(button, '/api/admin/toggle-team', { team_id: button.dataset.teamToggle }, 'Updating…', true);
+  }));
+  $$('[data-question-toggle]').forEach(button => button.addEventListener('click', async () => {
+    const disable = button.dataset.active === '1';
+    if (!await window.App.confirm(`${disable ? 'Disable' : 'Enable'} question ${button.dataset.questionToggle}? ${disable ? 'Disabled questions cannot receive new submissions. Review current assignments before proceeding.' : 'This question will become available in the active bank.'}`, { title: 'Update question availability', confirmText: disable ? 'Disable question' : 'Enable question', danger: disable })) return;
+    await performAction(button, '/api/admin/toggle-question', { question_id: button.dataset.questionToggle }, 'Updating…', true);
+  }));
+  $$('[data-question-view]').forEach(button => button.addEventListener('click', () => openDetail(`question-reference-${button.dataset.questionView}`)));
+  $$('[data-submission-view]').forEach(button => button.addEventListener('click', () => openDetail(`submission-review-${button.dataset.submissionView}`)));
+  $('#admin-detail-content').addEventListener('submit', async event => {
+    const form = event.target.closest('.admin-override-form');
+    if (!form) return;
+    event.preventDefault();
+    const score = Number(form.elements.new_score.value);
+    const maximum = Number(form.elements.new_score.max);
+    const reason = form.elements.reason.value.trim();
+    const error = $('.admin-form-error', form);
+    if (!Number.isFinite(score) || score < 0 || score > maximum || !reason) {
+      error.textContent = `Enter a score between 0 and ${maximum} and a reason for the change.`; return;
     }
-  } catch (e) {
-    showToast('Network error.', 'error');
-  }
-}
-
-// Toggle Question Active State
-async function toggleQuestionStatus(questionId) {
-  if (!confirm(`Toggle active status for question ${questionId}?`)) return;
-
-  try {
-    const res = await fetch('/api/admin/toggle-question', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question_id: questionId })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast(data.message, 'info');
-      setTimeout(() => window.location.reload(), 600);
-    } else {
-      showToast(data.error || 'Failed to toggle question.', 'error');
-    }
-  } catch (e) {
-    showToast('Network error.', 'error');
-  }
-}
-
-// Modal Utilities
-function openModal(id) {
-  const m = document.getElementById(id);
-  if (m) m.style.display = 'flex';
-}
-
-function closeModal(id) {
-  const m = document.getElementById(id);
-  if (m) m.style.display = 'none';
-}
-
-// Score Override Modal (Section 27)
-function openScoreOverrideModal(subId, teamName, qId, currentScore) {
-  document.getElementById('modal-sub-id').value = subId;
-  document.getElementById('modal-team-name').textContent = teamName;
-  document.getElementById('modal-question-id').textContent = qId;
-  document.getElementById('modal-new-score').value = currentScore;
-  document.getElementById('modal-reason').value = '';
-  openModal('score-override-modal');
-}
-
-async function submitScoreOverride() {
-  const subId = document.getElementById('modal-sub-id').value;
-  const newScore = document.getElementById('modal-new-score').value;
-  const reason = document.getElementById('modal-reason').value.trim();
-
-  if (!newScore || isNaN(newScore)) {
-    showToast('Please enter a valid numeric score.', 'error');
-    return;
-  }
-  if (!reason) {
-    showToast('Please provide an override rationale.', 'error');
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/admin/override-score', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        submission_id: parseInt(subId),
-        new_score: parseFloat(newScore),
-        reason: reason
-      })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast(data.message, 'info');
-      closeModal('score-override-modal');
-      setTimeout(() => window.location.reload(), 700);
-    } else {
-      showToast(data.error || 'Failed to override score.', 'error');
-    }
-  } catch (e) {
-    showToast('Network error during score override.', 'error');
-  }
-}
-
-// Safe Tournament Reset (Section 28)
-function openResetModal() {
-  document.getElementById('reset-confirmation-input').value = '';
-  openModal('reset-modal');
-}
-
-async function confirmEventReset() {
-  const code = (document.getElementById('reset-confirmation-input')?.value || '').trim();
-  if (code !== 'RESET EVENT' && code !== 'RESET') {
-    showToast("Confirmation failed. You must type 'RESET EVENT' exactly.", 'error');
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/admin/reset-event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ confirmation: code })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast(data.message, 'info');
-      closeModal('reset-modal');
-      setTimeout(() => window.location.reload(), 1000);
-    } else {
-      showToast(data.error || 'Failed to reset event.', 'error');
-    }
-  } catch (e) {
-    showToast('Network error during event reset.', 'error');
-  }
-}
+    error.textContent = '';
+    await performAction($('button[type="submit"]', form), '/api/admin/override-score', { submission_id: Number(form.dataset.submissionId), new_score: score, reason }, 'Saving score…', true);
+  });
+  $$('[data-quiz-action]').forEach(button => button.addEventListener('click', async () => {
+    const open = button.dataset.quizAction === 'open';
+    if (!await window.App.confirm(open ? 'Teams can start the engagement quiz. Quiz points will stay separate from debugging scores.' : 'Teams will no longer be able to submit quiz answers. This does not affect debugging scores.', { title: open ? 'Open rapid fire?' : 'Close the quiz?', confirmText: open ? 'Open quiz' : 'Close quiz', danger: !open })) return;
+    await performAction(button, '/api/admin/quiz-action', { action: button.dataset.quizAction }, open ? 'Opening…' : 'Closing…');
+  }));
+  $('#admin-publish-results').addEventListener('click', async event => {
+    const button = event.currentTarget;
+    if (!await window.App.confirm('The final debugging standings will be visible to every participant. Confirm that judging and score adjustments are complete. Quiz scores will not be included.', { title: 'Publish final results?', confirmText: 'Publish results' })) return;
+    await performAction(button, '/api/admin/publish-results', {}, 'Publishing…');
+  });
+  $('#admin-reset-open').addEventListener('click', () => {
+    $('#admin-reset-form').reset(); $('#admin-reset-confirm').disabled = true;
+    setText('#admin-reset-form .admin-form-error', ''); $('#admin-reset-dialog').showModal();
+    $('#reset-confirmation-input').focus();
+  });
+  $('#reset-confirmation-input').addEventListener('input', event => { $('#admin-reset-confirm').disabled = event.target.value !== 'RESET EVENT'; });
+  $('#admin-reset-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const confirmation = $('#reset-confirmation-input').value;
+    if (confirmation !== 'RESET EVENT') { setText('#admin-reset-form .admin-form-error', 'Type RESET EVENT exactly to proceed.'); return; }
+    await performAction($('#admin-reset-confirm'), '/api/admin/reset-event', { confirmation }, 'Resetting…', true);
+  });
+  $$('[data-close-dialog]').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
+  $$('.admin-dialog').forEach(dialog => dialog.addEventListener('click', event => { if (event.target === dialog) { const bounds = dialog.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close(); } }));
+  $('#admin-refresh').addEventListener('click', event => { event.currentTarget.setAttribute('aria-busy', 'true'); location.reload(); });
+  $('#admin-records-refresh')?.addEventListener('click', () => location.reload());
+  bindFilters('#team-search-input', '.team-row', '#team-search-empty', '#team-filter-count');
+  bindFilters('#question-search-input', '.question-row', '#question-search-empty');
+  $$('[data-local-time]').forEach(item => { const date = parseDate(item.dataset.localTime); if (date) { item.textContent = date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); item.dateTime = date.toISOString(); } });
+  window.addEventListener('hashchange', showPanel);
+  window.addEventListener('eventstate', event => updateState(event.detail));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshDashboard(); });
+  document.body.classList.add('admin-ready');
+  showPanel();
+  $$('[data-event-action]').forEach(button => { button.disabled = true; });
+  refreshDashboard();
+  pollHandle = setInterval(refreshDashboard, 5000);
+  const timerHandle = setInterval(updateTimer, 1000);
+  window.addEventListener('pagehide', () => { clearInterval(pollHandle); clearInterval(timerHandle); });
+})();

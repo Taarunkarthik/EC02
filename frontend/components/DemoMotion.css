@@ -1,0 +1,139 @@
+/* Homepage warm-up only: preserve the editor geometry and program content. */
+.hero-visual .editor-demo {
+  background:#0b0b0d;
+  border-color:#ad2b3c;
+  box-shadow:0 16px 50px #0006,0 0 23px #f43b461c;
+}
+.hero-visual .editor-demo .editor-titlebar {
+  background:#171114;
+  border-bottom-color:#46212a;
+  color:#bab0b6;
+}
+.hero-visual .editor-demo .window-dots i { background:#65313c; }
+.hero-visual .editor-demo .window-dots i:first-child { background:#f44a5c; }
+.hero-visual .editor-demo .window-dots i:nth-child(2) { background:#a84253; }
+.hero-visual .editor-demo .window-dots i:last-child { background:#76505a; }
+.hero-visual .editor-demo .demo-label {
+  color:#ffc2cb;
+  border-color:#98404e;
+  background:#48121d;
+}
+.hero-visual .editor-demo .editor-tab {
+  background:#180d12;
+  border-top-color:#ff5365;
+  border-right-color:#4b2530;
+  color:#f0dfe5;
+}
+.hero-visual .editor-demo .file-icon { color:#ff8495; }
+.hero-visual .editor-demo .editor-unsaved { background:#ff6376; }
+.hero-visual .editor-demo .tab-close { color:#bba3ad; }
+.hero-visual .editor-demo .editor-breadcrumb { color:#a99ba3; }
+.hero-visual .editor-demo .editor-breadcrumb span { color:#9b4b5e; }
+.hero-visual .editor-demo .demo-code { background:#0b0b0d; }
+.hero-visual .editor-demo .demo-code code { color:#f0e7eb; }
+.hero-visual .editor-demo .demo-code .line-num { color:#93818c; }
+.hero-visual .editor-demo .demo-code .code-comment { color:#a3919b; }
+.hero-visual .editor-demo .demo-code .code-purple { color:#ff8195; }
+.hero-visual .editor-demo .demo-code .code-blue { color:#f7d4dc; }
+.hero-visual .editor-demo .demo-code .code-amber { color:#ffd0bd; }
+.hero-visual .editor-demo .demo-code .code-red { color:#ff8d9d; }
+.hero-visual .editor-demo .demo-bug-line {
+  background:#ed334512;
+  border-left-color:#f44a5c;
+  transition:background-color .25s ease,border-color .25s ease;
+}
+.hero-visual .editor-demo[data-demo-stage="diagnostic"] .demo-bug-line {
+  background:#ed334527;
+  border-left-color:#ff8b9a;
+}
+.hero-visual .editor-demo .line-diagnostic { color:#ff7d90; }
+.hero-visual .editor-demo .demo-bug-line.is-fixed {
+  background:#83d8ac0c;
+  border-left-color:#83d8ac;
+}
+.hero-visual .editor-demo .demo-bug-line.is-fixed .code-red,
+.hero-visual .editor-demo .is-fixed .line-diagnostic { color:#a0e5bd; }
+.hero-visual .editor-demo .demo-console {
+  position:relative;
+  background:#0f0b0e;
+  border-top-color:#4a202d;
+}
+.hero-visual .editor-demo .console-tabs { color:#eee2e8; }
+.hero-visual .editor-demo .console-tabs .muted { color:#ac99a3; }
+.hero-visual .editor-demo .console-tabs b { color:#ffadb9; background:#612132; }
+.hero-visual .editor-demo .console-tabs button { color:#baa3ae; }
+.hero-visual .editor-demo .console-tabs button:hover { color:#ff92a2; }
+.hero-visual .editor-demo .console-tabs button:focus-visible {
+  outline:2px solid #ff6376;
+  outline-offset:4px;
+}
+.hero-visual .editor-demo .demo-console p { color:#dfcdd5; }
+.hero-visual .editor-demo .console-chevron { color:#ff6376; }
+.hero-visual .editor-demo .demo-status-badge { color:#db94a2; }
+.hero-visual .editor-demo .demo-status-badge.is-success { color:#a0e5bd; }
+.hero-visual .editor-demo .editor-statusbar { background:#3f101c; color:#f8bdca; }
+
+/* React supplies the measured transforms; these layers never change layout. */
+.hero-visual .editor-demo [data-demo-motion] {
+  position:absolute;
+  inset:0;
+  overflow:hidden;
+  pointer-events:none;
+  border-radius:inherit;
+  z-index:2;
+}
+.hero-visual .editor-demo .demo-scan-cursor {
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  height:25px;
+  opacity:0;
+  background:linear-gradient(90deg,#ff455525,transparent 82%);
+  border-left:2px solid #ff7687;
+  box-shadow:inset 0 1px #ff657514,inset 0 -1px #ff657514;
+  will-change:transform,opacity;
+}
+.hero-visual .editor-demo .demo-run-progress {
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:26px;
+  height:2px;
+  transform:scaleX(0);
+  transform-origin:left center;
+  background:linear-gradient(90deg,#a41e36,#ff7589);
+  box-shadow:0 0 8px #ff526778;
+  will-change:transform,opacity;
+}
+.hero-visual .editor-demo[data-demo-stage="passed"] .demo-run-progress {
+  background:#83d8ac;
+  box-shadow:0 0 8px #83d8ac44;
+}
+
+/* Keep both the permanent border and pointer highlight inside the clipping edge. */
+.hero-visual .editor-demo [data-react-border-root] { z-index:4; }
+.hero-visual .editor-demo .border-glow-card--strong::after {
+  inset:0;
+  border-width:2px;
+  border-color:#f03a50;
+  opacity:.86;
+  box-shadow:inset 0 0 12px #ed263f28;
+}
+.hero-visual .editor-demo .border-glow-card--strong > .edge-light {
+  inset:0;
+  padding:2px;
+}
+.hero-visual .editor-demo[data-demo-paused="true"] .demo-scan-cursor,
+.hero-visual .editor-demo[data-demo-paused="true"] .demo-run-progress { will-change:auto; }
+@media (prefers-reduced-motion:reduce) {
+  .hero-visual .editor-demo .demo-bug-line { transition:none; }
+  .hero-visual .editor-demo .demo-scan-cursor { display:none; }
+  .hero-visual .editor-demo .demo-run-progress { will-change:auto; }
+}
+.hero-visual .editor-demo #demo-status { display:inline-block; min-width:0; }
+.hero-visual .editor-demo #demo-return-value { display:inline-block; }
+/* Pausing holds the scan clock while keeping source and console text readable. */
+.hero-visual .editor-demo[data-demo-paused="true"] #demo-status,
+.hero-visual .editor-demo[data-demo-paused="true"] #demo-return-value,
+.hero-visual .editor-demo[data-demo-paused="true"] #demo-line-indicator { opacity:1!important; }

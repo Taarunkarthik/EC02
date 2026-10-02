@@ -111,6 +111,46 @@ CREATE TABLE IF NOT EXISTS admin_actions (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Fast lookup indexes
+CREATE INDEX IF NOT EXISTS idx_participants_team ON participants(team_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_team ON submissions(team_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_question ON submissions(question_id);
+CREATE INDEX IF NOT EXISTS idx_qassign_team ON question_assignments(team_id);
+
+-- Round state is independent from debugging scores and survives app restarts.
+CREATE TABLE IF NOT EXISTS competition_controls (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    quiz_status TEXT NOT NULL DEFAULT 'WAITING',
+    results_published INTEGER NOT NULL DEFAULT 0,
+    generation TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS team_activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    question_id TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_activity_team_time ON team_activity(team_id, created_at);
+CREATE TABLE IF NOT EXISTS quiz_sessions (
+    team_id TEXT PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    ends_at TEXT NOT NULL,
+    question_started_at TEXT NOT NULL,
+    completed_at TEXT,
+    FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS quiz_answers (
+    team_id TEXT NOT NULL,
+    question_id TEXT NOT NULL,
+    answer_index INTEGER,
+    points INTEGER NOT NULL DEFAULT 0,
+    answered_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (team_id, question_id),
+    FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+);
+
 -- Organizer-only activity signals (focus / fullscreen). Flags only: never auto-punish.
 CREATE TABLE IF NOT EXISTS activity_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,9 +160,3 @@ CREATE TABLE IF NOT EXISTS activity_events (
     FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_activity_team ON activity_events(team_id);
-
--- Fast lookup indexes
-CREATE INDEX IF NOT EXISTS idx_participants_team ON participants(team_id);
-CREATE INDEX IF NOT EXISTS idx_submissions_team ON submissions(team_id);
-CREATE INDEX IF NOT EXISTS idx_submissions_question ON submissions(question_id);
-CREATE INDEX IF NOT EXISTS idx_qassign_team ON question_assignments(team_id);

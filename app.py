@@ -1,6 +1,8 @@
 import os
 import io
 import csv
+import math
+from urllib.parse import urlsplit
 from datetime import datetime, timezone
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response
@@ -8,7 +10,8 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from config import Config
 from database import (
     init_db, get_db_connection, register_team,
-    log_admin_action, get_team_assigned_questions, get_client_question
+    log_admin_action, get_team_assigned_questions, get_client_question,
+    record_activity, get_competition_controls
 )
 from scoring import (
     process_submission, activate_rubber_duck, activate_git_revert,
@@ -19,8 +22,11 @@ from event_manager import (
     end_event, reset_event_data
 )
 
+from quiz import quiz_snapshot, start_quiz, answer_quiz, QUESTIONS as QUIZ_QUESTIONS, QUIZ_MINUTES
+
 app = Flask(__name__)
-app.config["SECRET_KEY"] = Config.SECRET_KEY
+app.config.update(SECRET_KEY=Config.SECRET_KEY, SESSION_COOKIE_HTTPONLY=True,
+                  SESSION_COOKIE_SAMESITE="Lax", MAX_CONTENT_LENGTH=64 * 1024)
 
 # Initialize database schema and seeds
 init_db()
@@ -38,10 +44,44 @@ def admin_required(f):
 def team_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not session.get("team_id"):
+        team_id = session.get("team_id")
+        if not team_id:
+            if request.path.startswith("/api/"):
+                return jsonify(success=False, error="Sign in to your team to continue."), 401
             return redirect(url_for("register", next=request.path))
+        conn = get_db_connection()
+        team = conn.execute("SELECT is_active FROM teams WHERE id = ?", (team_id,)).fetchone()
+        generation = conn.execute("SELECT generation FROM competition_controls WHERE id = 1").fetchone()[0]
+        conn.close()
+        if not team or not team["is_active"] or session.get("generation", generation) != generation:
+            session.clear()
+            if request.path.startswith("/api/"):
+                return jsonify(success=False, error="Your team session is no longer active. Contact an organizer."), 403
+            return redirect(url_for("register"))
         return f(*args, **kwargs)
     return decorated_function
+
+
+@app.before_request
+def validate_request():
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        origin = request.headers.get("Origin")
+        if request.headers.get("Sec-Fetch-Site") == "cross-site" or (origin and urlsplit(origin).netloc != request.host):
+            return jsonify(success=False, error="This request must come from the competition site."), 403
+        if request.path.startswith("/api/"):
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
+                return jsonify(success=False, error="Please send a valid JSON object."), 400
+
+
+@app.after_request
+def secure_response(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "same-origin"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    if request.path.startswith("/api/") or session.get("team_id") or session.get("is_admin"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 @app.context_processor
 def inject_global_data():
@@ -56,18 +96,23 @@ def inject_global_data():
     return {
         "event_state": ev_state,
         "connected_teams": teams_count,
-        "config": cfg
+        "config": cfg,
+        "results_published": bool(get_competition_controls()["results_published"])
     }
 
 # --- Error Handlers ---
 
 @app.errorhandler(404)
 def not_found(e):
+    if request.path.startswith("/api/"):
+        return jsonify(success=False, error="This endpoint was not found."), 404
     return render_template("404.html"), 404
 
 @app.errorhandler(500)
 def server_error(e):
     app.logger.error(f"Internal Server Error: {str(e)}")
+    if request.path.startswith("/api/"):
+        return jsonify(success=False, error="The server could not complete this request. Please try again."), 500
     return render_template("500.html"), 500
 
 # --- Public & Participant Views ---
@@ -102,6 +147,7 @@ def register():
             session.clear()
             session["team_id"] = team["id"]
             session["team_name"] = team["name"]
+            session["generation"] = get_competition_controls()["generation"]
 
             st = get_event_state()
             if st["event_status"] == "LIVE":
@@ -129,7 +175,8 @@ def register():
         session.clear()
         session["team_id"] = team_id
         session["team_name"] = name
-        session["just_registered"] = True  # one-shot: waiting room shows "TEAM INITIALIZED"
+        session["generation"] = get_competition_controls()["generation"]
+        session["just_registered"] = True
 
         st = get_event_state()
         if st["event_status"] == "LIVE":
@@ -170,9 +217,8 @@ def waiting():
     elif st["event_status"] == "COMPLETED":
         return redirect(url_for("result"))
 
-    just_registered = session.pop("just_registered", False)
     return render_template("waiting.html", team=team, members=members, teams_count=teams_count,
-                           just_registered=just_registered)
+                           just_registered=session.pop("just_registered", False), selected_language="Mixed language")
 
 @app.route("/arena")
 @app.route("/debug-arena")
@@ -225,7 +271,7 @@ def arena():
             current_question = uncompleted[0]
         else:
             unlocked = [q for q in assigned_questions if q["is_unlocked"]]
-            current_question = unlocked[0] if unlocked else (assigned_questions[0] if assigned_questions else None)
+            current_question = unlocked[0] if unlocked else None
 
     # Fetch sanitized client code and details for current question
     client_q = None
@@ -239,15 +285,8 @@ def arena():
 
     conn.close()
 
-    # Navigator metadata (id/order/difficulty/points/state only — never answer data)
-    nav_meta = [{"id": q["id"], "order": q["question_order"], "language": q["language"],
-                 "difficulty": q["difficulty"], "points": q["points"],
-                 "unlocked": bool(q["is_unlocked"]), "completed": bool(q["is_completed"])}
-                for q in assigned_questions]
-
     return render_template(
         "arena.html",
-        nav_meta=nav_meta,
         team=team,
         score=score,
         assigned_questions=assigned_questions,
@@ -264,6 +303,10 @@ def leaderboard():
 @app.route("/final-result")
 def result():
     team_id = session.get("team_id")
+    controls = get_competition_controls()
+    if team_id and session.get("generation", controls["generation"]) != controls["generation"]:
+        session.clear()
+        team_id = None
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -292,7 +335,15 @@ def result():
     winners = cur.fetchall()
 
     conn.close()
-    return render_template("result.html", team=team, score=score, winners=winners)
+    controls = get_competition_controls()
+    published = bool(controls["results_published"])
+    ranking = _leaderboard_rows()
+    final_rank = next((i for i, row in enumerate(ranking, 1) if row["id"] == team_id), None) if published else None
+    quiz = quiz_snapshot(team_id) if team else {"quiz_score": 0, "quiz_total": len(QUIZ_QUESTIONS)}
+    total_questions = len(get_team_assigned_questions(team_id)) if team else 0
+    return render_template("result.html", team=team, score=score, winners=winners if published else [],
+                           final_rank=final_rank, total_questions=total_questions, quiz=quiz,
+                           quiz_score=quiz["quiz_score"], quiz_total=quiz["quiz_total"], results_published=published)
 
 # --- JSON API Endpoints ---
 
@@ -305,12 +356,16 @@ def api_event_status():
     teams_count = cur.fetchone()["count"]
     conn.close()
     
-    st["connected_teams"] = teams_count
+    controls = get_competition_controls()
+    st.update(connected_teams=teams_count, generation=controls["generation"],
+              quiz_status=controls["quiz_status"], results_published=bool(controls["results_published"]))
     return jsonify(st)
 
 @app.route("/api/question/<qid>")
 @team_required
 def api_get_question(qid):
+    if get_event_state()["event_status"] not in ("LIVE", "PAUSED"):
+        return jsonify(success=False, error="Questions are available during the debugging round."), 403
     team_id = session.get("team_id")
     q = get_client_question(team_id, qid)
     if not q:
@@ -332,10 +387,16 @@ def api_submit_bug_fix():
 
     data = request.get_json() or {}
     question_id = data.get("question_id")
-    if not question_id:
+    if not isinstance(question_id, str) or not question_id or len(question_id) > 40:
         return jsonify({"success": False, "error": "Question ID required."}), 400
 
-    result, err = process_submission(team_id, question_id, data)
+    for field in ("error_location", "error_type", "expected_output", "cause", "correction"):
+        if not isinstance(data.get(field, ""), str) or len(data.get(field, "")) > 6000:
+            return jsonify(success=False, error="Response fields must be text, up to 6,000 characters each."), 400
+    request_id = data.get("request_id")
+    if request_id is not None and (not isinstance(request_id, str) or not 1 <= len(request_id) <= 80):
+        return jsonify(success=False, error="Invalid submission request identifier."), 400
+    result, err = process_submission(team_id, question_id, data, enforce_live=True)
     if err:
         return jsonify({"success": False, "error": err}), 400
 
@@ -362,10 +423,10 @@ def api_powerup_rubber_duck():
 
     data = request.get_json() or {}
     question_id = data.get("question_id")
-    if not question_id:
+    if not isinstance(question_id, str) or not question_id or len(question_id) > 40:
         return jsonify({"success": False, "error": "Question ID required."}), 400
 
-    success, msg, hint = activate_rubber_duck(team_id, question_id)
+    success, msg, hint = activate_rubber_duck(team_id, question_id, enforce_live=True)
     if not success:
         return jsonify({"success": False, "error": msg}), 400
 
@@ -381,10 +442,10 @@ def api_powerup_git_revert():
 
     data = request.get_json() or {}
     question_id = data.get("question_id")
-    if not question_id:
+    if not isinstance(question_id, str) or not question_id or len(question_id) > 40:
         return jsonify({"success": False, "error": "Question ID required."}), 400
 
-    success, msg, new_qid = activate_git_revert(team_id, question_id)
+    success, msg, new_qid = activate_git_revert(team_id, question_id, enforce_live=True)
     if not success:
         return jsonify({"success": False, "error": msg}), 400
 
@@ -400,82 +461,41 @@ def api_powerup_double_commit():
 
     data = request.get_json() or {}
     question_id = data.get("question_id")
-    if not question_id:
+    if not isinstance(question_id, str) or not question_id or len(question_id) > 40:
         return jsonify({"success": False, "error": "Question ID required."}), 400
 
-    success, msg = arm_double_commit(team_id, question_id)
+    success, msg = arm_double_commit(team_id, question_id, enforce_live=True)
     if not success:
         return jsonify({"success": False, "error": msg}), 400
 
     return jsonify({"success": True, "message": msg})
 
-@app.route("/api/team-name-available")
-def api_team_name_available():
-    """Inline validation helper for the registration form (team names are public on the leaderboard)."""
-    name = (request.args.get("name") or "").strip()
-    if not name:
-        return jsonify({"available": False, "reason": "empty"})
+def _leaderboard_rows():
     conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT 1 FROM teams WHERE UPPER(name) = UPPER(?)", (name,))
-    taken = cur.fetchone() is not None
-    conn.close()
-    return jsonify({"available": not taken})
+    try:
+        rows = [dict(r) for r in conn.execute("""
+            SELECT t.id, t.name, COALESCE(s.score, 0) AS score,
+                   COALESCE(s.completed_count, 0) AS completed_count,
+                   s.last_submission_time AS finish_time, t.is_active
+            FROM teams t LEFT JOIN scores s ON t.id = s.team_id
+            WHERE t.is_active = 1
+            ORDER BY score DESC, completed_count DESC, finish_time ASC, t.id ASC
+        """).fetchall()]
+        for rank, row in enumerate(rows, 1):
+            row.update(rank=rank, debug_score=row["score"])
+        return rows
+    finally:
+        conn.close()
 
-ACTIVITY_TYPES = {"focus_lost", "focus_regained", "fullscreen_enter", "fullscreen_exit", "tab_hidden", "tab_visible"}
-
-@app.route("/api/activity", methods=["POST"])
-@team_required
-def api_activity():
-    """Organizer signal only. Team ID comes from the session, never the request body."""
-    team_id = session.get("team_id")
-    etype = (request.get_json(silent=True) or {}).get("type")
-    if etype not in ACTIVITY_TYPES:
-        return jsonify({"success": False}), 400
-    conn = get_db_connection()
-    cur = conn.cursor()
-    # throttle: ignore identical events from the same team within 1 second
-    cur.execute("""SELECT 1 FROM activity_events WHERE team_id = ? AND event_type = ?
-                   AND created_at >= datetime('now', '-1 seconds')""", (team_id, etype))
-    if not cur.fetchone():
-        cur.execute("INSERT INTO activity_events (team_id, event_type) VALUES (?, ?)", (team_id, etype))
-        conn.commit()
-    conn.close()
-    return jsonify({"success": True})
 
 @app.route("/api/leaderboard-data")
 def api_leaderboard_data():
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    # Query with tie-breaker:
-    # 1. Higher total score
-    # 2. Higher number of completed questions
-    # 3. Earlier final qualifying submission time
-    cur.execute("""
-        SELECT 
-            t.id, 
-            t.name, 
-            COALESCE(s.score, 0) as score,
-            COALESCE(s.completed_count, 0) as completed_count,
-            MIN(s.last_submission_time) as finish_time,
-            t.is_active
-        FROM teams t
-        LEFT JOIN scores s ON t.id = s.team_id
-        WHERE t.is_active = 1
-        GROUP BY t.id
-        ORDER BY score DESC, completed_count DESC, finish_time ASC
-    """)
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
-
-    st = get_event_state()
-
-    return jsonify({
-        "leaderboard": rows,
-        "current_team_id": session.get("team_id"),
-        "event_status": st["event_status"]
-    })
+    state = get_event_state()
+    published = bool(get_competition_controls()["results_published"])
+    mode = "FINAL" if published else ("FROZEN" if state["event_status"] in ("PAUSED", "COMPLETED") else "LIVE")
+    return jsonify(leaderboard=_leaderboard_rows(), current_team_id=session.get("team_id"),
+                   event_status=state["event_status"], leaderboard_state=mode,
+                   remaining_seconds=state["remaining_seconds"], results_published=published)
 
 # --- Admin Portal Routes & Actions ---
 
@@ -538,7 +558,7 @@ def admin_dashboard():
 
     # Recent submissions stream
     cur.execute("""
-        SELECT s.*, t.name as team_name, q.title as question_title
+        SELECT s.*, t.name as team_name, q.title as question_title, q.points as points
         FROM submissions s
         JOIN teams t ON s.team_id = t.id
         JOIN questions q ON s.question_id = q.id
@@ -555,7 +575,8 @@ def admin_dashboard():
         question_count=question_count,
         teams=teams,
         questions=questions,
-        submissions=submissions
+        submissions=submissions,
+        quiz={"status": get_competition_controls()["quiz_status"], "question_count": len(QUIZ_QUESTIONS), "duration_minutes": QUIZ_MINUTES}
     )
 
 @app.route("/api/admin/event-action", methods=["POST"])
@@ -580,27 +601,37 @@ def api_admin_event_action():
 @app.route("/api/admin/override-score", methods=["POST"])
 @admin_required
 def api_admin_override_score():
+    if get_competition_controls()["results_published"]:
+        return jsonify(success=False, error="Results are final. Reset the event before changing competition data."), 409
     data = request.get_json() or {}
     sub_id = data.get("submission_id")
     new_score = data.get("new_score")
     reason = data.get("reason", "Admin manual scoring override")
 
-    if sub_id is None or new_score is None:
+    if type(sub_id) is not int or sub_id < 1 or new_score is None:
         return jsonify({"success": False, "error": "Submission ID and new score are required."}), 400
 
     try:
         new_sc = float(new_score)
-    except ValueError:
+    except (ValueError, TypeError):
         return jsonify({"success": False, "error": "Invalid score value."}), 400
+    if not math.isfinite(new_sc) or new_sc < 0:
+        return jsonify(success=False, error="Score must be a finite non-negative number."), 400
+    if not isinstance(reason, str) or not reason.strip() or len(reason) > 1000:
+        return jsonify(success=False, error="Enter an override reason of up to 1,000 characters."), 400
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT team_id FROM submissions WHERE id = ?", (sub_id,))
+    cur.execute("BEGIN IMMEDIATE")
+    cur.execute("SELECT s.team_id, s.is_double_commit, q.points FROM submissions s JOIN questions q ON q.id = s.question_id WHERE s.id = ?", (sub_id,))
     row = cur.fetchone()
     if not row:
         conn.close()
         return jsonify({"success": False, "error": "Submission not found."}), 404
 
+    if new_sc > row["points"] * (2 if row["is_double_commit"] else 1):
+        conn.close()
+        return jsonify(success=False, error="Score exceeds the maximum available for this submission."), 400
     team_id = row["team_id"]
 
     cur.execute("""
@@ -637,13 +668,18 @@ def api_admin_override_score():
 @app.route("/api/admin/toggle-team", methods=["POST"])
 @admin_required
 def api_admin_toggle_team():
+    if get_competition_controls()["results_published"]:
+        return jsonify(success=False, error="Results are final. Reset the event before changing competition data."), 409
     team_id = (request.get_json() or {}).get("team_id")
-    if not team_id:
+    if not isinstance(team_id, str) or not team_id or len(team_id) > 40:
         return jsonify({"success": False, "error": "Team ID required."}), 400
 
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("UPDATE teams SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?", (team_id,))
+    if cur.rowcount == 0:
+        conn.close()
+        return jsonify(success=False, error="Team not found."), 404
     conn.commit()
     conn.close()
     log_admin_action("TOGGLE_TEAM", f"Toggled active state for team {team_id}.")
@@ -652,13 +688,18 @@ def api_admin_toggle_team():
 @app.route("/api/admin/toggle-question", methods=["POST"])
 @admin_required
 def api_admin_toggle_question():
+    if get_competition_controls()["results_published"]:
+        return jsonify(success=False, error="Results are final. Reset the event before changing competition data."), 409
     question_id = (request.get_json() or {}).get("question_id")
-    if not question_id:
+    if not isinstance(question_id, str) or not question_id or len(question_id) > 40:
         return jsonify({"success": False, "error": "Question ID required."}), 400
 
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("UPDATE questions SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?", (question_id,))
+    if cur.rowcount == 0:
+        conn.close()
+        return jsonify(success=False, error="Question not found."), 404
     conn.commit()
     conn.close()
     log_admin_action("TOGGLE_QUESTION", f"Toggled active state for question {question_id}.")
@@ -737,6 +778,188 @@ def export_results_csv():
         headers={"Content-Disposition": "attachment; filename=final_leaderboard.csv"}
     )
 
+# --- Live participant and organizer APIs ---
+
+@app.errorhandler(413)
+def request_too_large(error):
+    if request.path.startswith("/api/"):
+        return jsonify(success=False, error="This request is too large. Shorten your response and try again."), 413
+    return "This request is too large.", 413
+
+
+@app.route("/api/team-name-available")
+def api_team_name_available():
+    name = request.args.get("name", "").strip()
+    if not name or len(name) > 80:
+        return jsonify(available=False, message="Enter a team name of 1–80 characters.")
+    conn = get_db_connection()
+    exists = conn.execute("SELECT 1 FROM teams WHERE UPPER(name) = UPPER(?)", (name,)).fetchone()
+    conn.close()
+    return jsonify(available=not bool(exists), message="Team name already exists" if exists else "Team name available")
+
+
+@app.route("/api/team-progress")
+@team_required
+def api_team_progress():
+    team_id = session["team_id"]
+    state = get_event_state()
+    conn = get_db_connection()
+    try:
+        sc = dict(conn.execute("SELECT score, completed_count FROM scores WHERE team_id = ?", (team_id,)).fetchone())
+        powerups = {r["powerup_type"]: dict(r) for r in conn.execute("SELECT * FROM powerups WHERE team_id = ?", (team_id,))}
+        latest = conn.execute("SELECT 1 FROM team_activity WHERE team_id = ? AND created_at >= datetime('now', '-60 seconds') LIMIT 1", (team_id,)).fetchone()
+        if not latest:
+            record_activity(team_id, "heartbeat", cur=conn.cursor())
+            conn.commit()
+    finally:
+        conn.close()
+    questions = get_team_assigned_questions(team_id)
+    return jsonify(success=True, score=sc["score"], debug_score=sc["score"], completed_count=sc["completed_count"],
+                   total_questions=len(questions), questions=questions, powerups=powerups,
+                   generation=get_competition_controls()["generation"],
+                   event_status=state["event_status"], remaining_seconds=state["remaining_seconds"])
+
+
+@app.route("/api/activity", methods=["POST"])
+@team_required
+def api_activity():
+    event_type = request.get_json().get("event_type", request.get_json().get("type"))
+    event_type = {"focus_lost": "window_blur", "focus_regained": "window_focus", "tab_visible": "window_visible"}.get(event_type, event_type) if isinstance(event_type, str) else event_type
+    allowed = {"fullscreen_exit", "fullscreen_enter", "tab_hidden", "window_blur", "window_focus", "window_visible"}
+    if not isinstance(event_type, str) or event_type not in allowed:
+        return jsonify(success=False, error="Unrecognized activity signal."), 400
+    if get_event_state()["event_status"] not in ("LIVE", "PAUSED"):
+        return jsonify(success=True, recorded=False)
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        count = conn.execute("SELECT COUNT(*) FROM team_activity WHERE team_id = ?", (session["team_id"],)).fetchone()[0]
+        recent = conn.execute("SELECT 1 FROM team_activity WHERE team_id = ? AND event_type = ? AND created_at >= datetime('now', '-2 seconds') LIMIT 1", (session["team_id"], event_type)).fetchone()
+        recorded = count < 2000 and not recent
+        if recorded:
+            record_activity(session["team_id"], event_type, cur=conn.cursor())
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify(success=True, recorded=bool(recorded))
+
+
+@app.route("/quiz")
+@team_required
+def quiz():
+    state = get_event_state()
+    if state["event_status"] != "COMPLETED":
+        return redirect(url_for("waiting" if state["event_status"] == "WAITING" else "arena"))
+    conn = get_db_connection()
+    team = conn.execute("SELECT id, name FROM teams WHERE id = ?", (session["team_id"],)).fetchone()
+    conn.close()
+    return render_template("quiz.html", team=team, quiz=quiz_snapshot(session["team_id"]))
+
+
+def _quiz_response(snapshot):
+    return jsonify(success=True, quiz=snapshot, event_status=get_event_state()["event_status"],
+                   results_published=bool(get_competition_controls()["results_published"]))
+
+
+@app.route("/api/quiz/status")
+@team_required
+def api_quiz_status():
+    return _quiz_response(quiz_snapshot(session["team_id"]))
+
+
+@app.route("/api/quiz/start", methods=["POST"])
+@team_required
+def api_quiz_start():
+    get_event_state()  # Materialize a timer expiry before opening the fun round.
+    snapshot, error = start_quiz(session["team_id"])
+    if error:
+        return jsonify(success=False, error=error), 403
+    return _quiz_response(snapshot)
+
+
+@app.route("/api/quiz/answer", methods=["POST"])
+@team_required
+def api_quiz_answer():
+    data = request.get_json()
+    snapshot, error = answer_quiz(session["team_id"], data.get("question_id"), data.get("answer_index"))
+    if error:
+        return jsonify(success=False, error=error), 400
+    return _quiz_response(snapshot)
+
+
+@app.route("/api/admin/quiz-action", methods=["POST"])
+@admin_required
+def api_admin_quiz_action():
+    action = request.get_json().get("action")
+    if action not in ("open", "close"):
+        return jsonify(success=False, error="Choose open or close for the quiz."), 400
+    if get_event_state()["event_status"] != "COMPLETED":
+        return jsonify(success=False, error="Complete debugging before opening the quiz."), 400
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        current = conn.execute("SELECT quiz_status FROM competition_controls WHERE id = 1").fetchone()[0]
+        if action == "open" and current == "CLOSED":
+            return jsonify(success=False, error="This quiz has closed. Reset the event to begin a new quiz."), 400
+        if action == "close" and current != "OPEN":
+            return jsonify(success=False, error="The quiz is not open."), 400
+        conn.execute("UPDATE competition_controls SET quiz_status = ? WHERE id = 1", ("OPEN" if action == "open" else "CLOSED",))
+        if action == "close":
+            conn.execute("UPDATE quiz_sessions SET completed_at = ? WHERE completed_at IS NULL", (datetime.now(timezone.utc).isoformat(),))
+        conn.commit()
+    finally:
+        conn.close()
+    log_admin_action("QUIZ_" + action.upper(), "Fun round only; debugging scores unchanged.")
+    return jsonify(success=True, message="Quiz opened." if action == "open" else "Quiz closed.")
+
+
+@app.route("/api/admin/publish-results", methods=["POST"])
+@admin_required
+def api_admin_publish_results():
+    if get_event_state()["event_status"] != "COMPLETED":
+        return jsonify(success=False, error="Complete debugging before publishing winners."), 400
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE competition_controls SET results_published = 1 WHERE id = 1")
+        conn.commit()
+    finally:
+        conn.close()
+    log_admin_action("PUBLISH_RESULTS", "Verified debugging rankings published. Quiz scores excluded.")
+    return jsonify(success=True, message="Verified debugging results published.")
+
+
+@app.route("/api/admin/dashboard-data")
+@admin_required
+def api_admin_dashboard_data():
+    state = get_event_state()
+    conn = get_db_connection()
+    try:
+        stats = {
+            "registered_teams": conn.execute("SELECT COUNT(*) FROM teams").fetchone()[0],
+            "active_teams": conn.execute("SELECT COUNT(DISTINCT a.team_id) FROM team_activity a JOIN teams t ON t.id = a.team_id WHERE t.is_active = 1 AND a.created_at >= datetime('now', '-5 minutes')").fetchone()[0],
+            "total_submissions": conn.execute("SELECT COUNT(*) FROM submissions").fetchone()[0],
+            "average_score": round(conn.execute("SELECT COALESCE(AVG(s.score), 0) FROM teams t LEFT JOIN scores s ON s.team_id = t.id WHERE t.is_active = 1").fetchone()[0], 1),
+            "questions_solved": conn.execute("SELECT COALESCE(SUM(completed_count), 0) FROM scores").fetchone()[0],
+        }
+        activity = [dict(r) for r in conn.execute("""SELECT a.event_type, a.question_id, a.created_at, t.name AS team_name
+            FROM team_activity a JOIN teams t ON a.team_id = t.id WHERE a.event_type != 'heartbeat'
+            ORDER BY a.id DESC LIMIT 30""")]
+        security = [dict(r) for r in conn.execute("""SELECT t.id AS team_id, t.name AS team_name,
+            SUM(CASE WHEN a.event_type = 'fullscreen_exit' THEN 1 ELSE 0 END) AS fullscreen_exits,
+            SUM(CASE WHEN a.event_type = 'tab_hidden' THEN 1 ELSE 0 END) AS tab_switches,
+            SUM(CASE WHEN a.event_type = 'window_blur' THEN 1 ELSE 0 END) AS focus_losses,
+            MAX(a.created_at) AS last_seen
+            FROM teams t LEFT JOIN team_activity a ON a.team_id = t.id GROUP BY t.id ORDER BY t.name""")]
+        controls = dict(conn.execute("SELECT * FROM competition_controls WHERE id = 1").fetchone())
+        quiz_data = {"status": controls["quiz_status"], "question_count": len(QUIZ_QUESTIONS), "duration_minutes": QUIZ_MINUTES,
+                     "participants": conn.execute("SELECT COUNT(*) FROM quiz_sessions").fetchone()[0],
+                     "completed": conn.execute("SELECT COUNT(*) FROM quiz_sessions WHERE completed_at IS NOT NULL").fetchone()[0]}
+    finally:
+        conn.close()
+    return jsonify(success=True, stats=stats, activity=activity, security=security, event_state=state,
+                   quiz=quiz_data, results_published=bool(controls["results_published"]))
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"\n==========================================")
@@ -745,4 +968,4 @@ if __name__ == "__main__":
     print(f" Access URL: http://127.0.0.1:{port}")
     print(f" Admin URL:  http://127.0.0.1:{port}/admin/login")
     print(f"==========================================\n")
-    app.run(host="127.0.0.1", port=port, debug=True)
+    app.run(host="127.0.0.1", port=port, debug=os.environ.get("FLASK_DEBUG") == "1")
