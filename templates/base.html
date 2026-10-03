@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  {% set participant_protected = session.get('team_id') and request.path in ('/arena', '/debug-arena', '/quiz') %}
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#080808">
@@ -12,7 +13,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/interactions.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='dist/react-bits.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/black-red.css') }}">
-  {% if session.get('team_id') and not request.path.startswith('/admin') and request.path != '/blocked' %}
+  {% if participant_protected %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/participant-guard.css') }}">
   {% endif %}
   {% block head %}{% endblock %}
@@ -55,7 +56,7 @@
   <dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-title">
     <form method="dialog"><span class="eyebrow">CONFIRM ACTION</span><h2 id="confirm-title">Continue?</h2><p id="confirm-message" class="muted"></p><div class="modal-actions"><button value="cancel" class="btn btn-secondary" autofocus>Cancel</button><button id="confirm-accept" value="confirm" class="btn btn-primary">Confirm</button></div></form>
   </dialog>
-  {% if session.get('team_id') and not request.path.startswith('/admin') and request.path != '/blocked' %}
+  {% if participant_protected %}
   <dialog id="participant-gate" class="participant-gate" aria-labelledby="participant-gate-title" aria-describedby="participant-gate-message" data-team="{{ session.get('team_id') }}" data-generation="{{ session.get('generation', '') }}">
     <span class="eyebrow">PARTICIPANT SESSION</span><div class="guard-icon" aria-hidden="true">⛶</div>
     <h2 id="participant-gate-title">Enter fullscreen</h2>
@@ -71,7 +72,7 @@
   <script src="{{ url_for('static', filename='js/timer.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/interactions.js') }}" defer></script>
   <script src="{{ url_for('static', filename='dist/react-bits.js') }}" defer></script>
-  {% if session.get('team_id') and not request.path.startswith('/admin') and request.path != '/blocked' %}
+  {% if participant_protected %}
   <script src="{{ url_for('static', filename='js/participant-guard.js') }}" defer></script>
   {% endif %}
   {% block scripts %}{% endblock %}
