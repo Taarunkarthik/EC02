@@ -31,8 +31,8 @@ def test_database_initialization():
     cur.execute("SELECT * FROM event_state WHERE id = 1")
     st = cur.fetchone()
     assert st["event_status"] == "WAITING"
-    assert st["duration_minutes"] == 70
-    assert st["remaining_seconds"] == 4200
+    assert st["duration_minutes"] == 40
+    assert st["remaining_seconds"] == 2400
 
     conn.close()
 
@@ -69,6 +69,37 @@ def test_team_registration():
     assert pu["GIT_REVERT"] == 0
     assert pu["DOUBLE_COMMIT"] == 0
 
+    conn.close()
+
+def test_waiting_round_adopts_new_duration_without_losing_teams():
+    team_id, error = register_team("Existing waiting team", "Dev A", "Dev B")
+    assert error is None
+    conn = get_db_connection()
+    conn.execute("UPDATE event_state SET duration_minutes = 70, remaining_seconds = 4200 WHERE id = 1")
+    conn.commit()
+    conn.close()
+
+    init_db()
+    conn = get_db_connection()
+    state = conn.execute("SELECT * FROM event_state WHERE id = 1").fetchone()
+    assert state["duration_minutes"] == 40 and state["remaining_seconds"] == 2400
+    assert conn.execute("SELECT COUNT(*) FROM question_assignments WHERE team_id = ?", (team_id,)).fetchone()[0] == 30
+    conn.close()
+
+@pytest.mark.parametrize("status", ["LIVE", "PAUSED", "COMPLETED"])
+def test_duration_update_preserves_rounds_already_started(status):
+    conn = get_db_connection()
+    conn.execute("""UPDATE event_state SET event_status = ?, duration_minutes = 70,
+        remaining_seconds = ?, is_paused = ?, event_start_time = '2026-10-07T09:20:00+00:00',
+        event_end_time = '2026-10-07T10:30:00+00:00' WHERE id = 1""",
+        (status, 0 if status == "COMPLETED" else 1800, int(status == "PAUSED")))
+    conn.commit()
+    before = dict(conn.execute("SELECT * FROM event_state WHERE id = 1").fetchone())
+    conn.close()
+
+    init_db()
+    conn = get_db_connection()
+    assert dict(conn.execute("SELECT * FROM event_state WHERE id = 1").fetchone()) == before
     conn.close()
 
 def test_duplicate_team_name():

@@ -98,10 +98,10 @@ CREATE TABLE IF NOT EXISTS event_state (
     event_status TEXT NOT NULL DEFAULT 'WAITING',
     event_start_time TEXT,
     event_end_time TEXT,
-    duration_minutes INTEGER DEFAULT 70,
+    duration_minutes INTEGER DEFAULT 40,
     is_paused INTEGER DEFAULT 0,
     pause_time TEXT,
-    remaining_seconds INTEGER DEFAULT 4200
+    remaining_seconds INTEGER DEFAULT 2400
 );
 
 CREATE TABLE IF NOT EXISTS admin_actions (

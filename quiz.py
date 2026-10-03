@@ -2,8 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from database import get_db_connection
 
-QUIZ_MINUTES = 10
-QUESTION_SECONDS = 60
+QUIZ_MINUTES = 7
 # Kept out of static assets and participant HTML/JSON.
 QUESTIONS = [
     ('R01', 'In Python, what does print(7 // 2) display?', ['3.5', '3', '4', '2'], 1),
@@ -17,6 +16,7 @@ QUESTIONS = [
     ('R09', 'In Python, what does print(len([0, False, ""])) display?', ['0', '3', '2', '1'], 1),
     ('R10', 'In C, int x = 5; x += 2; What is x now?', ['2', '5', '7', '10'], 2),
 ]
+QUESTION_SECONDS = QUIZ_MINUTES * 60 // len(QUESTIONS)
 
 
 def _now():
@@ -71,6 +71,7 @@ def _snapshot(cur, team_id, now):
                            "points": answer["points"]})
     return {"status": status, "started": session is not None, "completed": completed, "answers": review,
             "quiz_score": score, "quiz_total": len(QUESTIONS), "answered_count": count,
+            "duration_minutes": QUIZ_MINUTES, "question_seconds": QUESTION_SECONDS,
             "remaining_seconds": remaining, "question_remaining_seconds": question_remaining,
             "current_question": question}
 

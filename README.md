@@ -1,6 +1,6 @@
 # EXIT CODE 0
 
-A live competitive debugging platform for **IEEE Computer Society**, Amrita Vishwa Vidyapeetham, Bengaluru. **7 October 2026, 2:50–4:00 PM IST · 70 minutes · teams of 2–3.**
+A live competitive debugging platform for **IEEE Computer Society**, Amrita Vishwa Vidyapeetham, Bengaluru. **7 October 2026, 2:50–4:00 PM IST · 40-minute debugging round · 7-minute quiz · teams of 2–3.**
 
 **Analyse → Debug → Fix → Exit 0**
 
@@ -77,7 +77,7 @@ Power-ups remain one use per team: **Rubber Duck** reveals a hint with a 10% bas
 3. In **Event control**, start debugging. Pause preserves remaining server time; resume continues it. Ending requires confirmation and locks submissions.
 4. In **Submissions**, review participant responses and apply bounded score adjustments with a reason.
 5. Inspect **Security** for focus losses, tab switches, fullscreen exits, and last activity. Two departures block the account, including app focus loss and browser tab switches. Review a block in Security, then use Teams → Enable to restore access and reset the violation count.
-6. After debugging ends, open **Quiz**. The quiz has 10 questions, a 10-minute session deadline, and 60-second server-controlled question deadlines. Refreshing does not reset them.
+6. After debugging ends, open **Quiz**. The quiz has 10 questions, a 7-minute session deadline, and 42-second server-controlled question deadlines. Refreshing does not reset them.
 7. Verify debugging standings, then **Publish final results** in **Leaderboard**. The participant results page shows final rank and podium only after publication.
 8. Export roster/results as CSV. In **Settings**, reset only after exporting anything needed. Reset requires typing **RESET EVENT** and clears quiz/activity data as well as competition progress.
 

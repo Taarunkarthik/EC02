@@ -129,7 +129,7 @@
       button.disabled = actionInFlight || !completed || (open ? quiz.status !== 'WAITING' : quiz.status !== 'OPEN');
     });
     setText('#admin-quiz-note', quiz.status === 'OPEN'
-      ? `The quiz is open. ${quiz.question_count || 10} questions · ${quiz.duration_minutes || 10} minutes per team. Debugging scores stay unchanged.`
+      ? `The quiz is open. ${quiz.question_count || 10} questions · ${quiz.duration_minutes || 7} minutes per team. Debugging scores stay unchanged.`
       : quiz.status === 'CLOSED' ? 'The quiz is closed. Completed quiz scores remain separate from the debugging rankings.'
       : completed ? 'Debugging has ended. You can now open the engagement quiz.' : 'The quiz becomes available after debugging ends.');
     const publish = $('#admin-publish-results');
@@ -290,7 +290,7 @@
     button.addEventListener('click', async () => {
       const action = button.dataset.eventAction;
       const confirmations = {
-        start: ['Start the debugging round?', `The ${state.duration_minutes || 70}-minute server timer will begin immediately and eligible teams will enter the arena.`, 'Start event'],
+        start: ['Start the debugging round?', `The ${state.duration_minutes || 40}-minute server timer will begin immediately and eligible teams will enter the arena.`, 'Start event'],
         pause: ['Pause the competition?', 'The clock will stop and submissions will be temporarily locked. Remaining time is preserved.', 'Pause event'],
         resume: ['Resume the competition?', 'The timer will continue from its remaining time and teams can submit again.', 'Resume event'],
         end: ['End the debugging round?', 'This closes all debugging submissions immediately. The round cannot be resumed after ending.', 'End event']

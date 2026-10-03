@@ -20,7 +20,7 @@ def test_landing_page(client):
     assert b"EXIT CODE" in res.data
     assert b"IEEE Computer Society" in res.data
     assert b"7 October 2026" in res.data
-    assert "70 minutes" in re.sub(r"<[^>]+>", "", res.get_data(as_text=True)).lower()
+    assert "40 minutes" in re.sub(r"<[^>]+>", "", res.get_data(as_text=True)).lower()
     assert b"enter the arena" in res.data.lower()
 
 def test_admin_login(client):

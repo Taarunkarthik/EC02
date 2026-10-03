@@ -21,9 +21,9 @@ def test_event_start():
 
     state_after = get_event_state()
     assert state_after["event_status"] == "LIVE"
-    assert state_after["duration_minutes"] == 70
+    assert state_after["duration_minutes"] == 40
     assert state_after["remaining_seconds"] > 0
-    assert state_after["remaining_seconds"] <= 4200
+    assert 2398 <= state_after["remaining_seconds"] <= 2400
     assert state_after["is_paused"] == 0
 
 def test_event_pause():
@@ -95,5 +95,5 @@ def test_event_reset():
 
     state = get_event_state()
     assert state["event_status"] == "WAITING"
-    assert state["remaining_seconds"] == 4200
+    assert state["remaining_seconds"] == 2400
     conn.close()

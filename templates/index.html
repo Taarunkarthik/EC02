@@ -9,7 +9,7 @@
       <p class="eyebrow"><span class="blue-dot"></span> IEEE WEEK 2026 <span class="eyebrow-divider">/</span> TECHNICAL EVENT</p>
       <h1 id="hero-heading" class="tech-hero-heading"><span class="tech-fallback">EXIT CODE <em>0</em></span><span class="tech-title" data-tech-text="EXIT CODE 0" aria-hidden="true"></span></h1>
       <h2 class="hero-tagline">Find the bug.<br>Fix the code.<br><span>Exit clean.</span></h2>
-      <p class="hero-description">70 minutes. 30 debugging challenges. Python and C. Work in teams of two or three to trace the failures and submit precise fixes.</p>
+      <p class="hero-description">{{ config.duration_minutes }} minutes. 30 debugging challenges. Python and C. Work in teams of two or three to trace the failures and submit precise fixes.</p>
       <div class="action-row"><a class="btn btn-primary btn-large" href="{{ '/arena' if session.get('team_id') else '/register' }}">Enter the arena <span aria-hidden="true">↗</span></a><a class="btn btn-secondary btn-large" href="/leaderboard">View leaderboard <span aria-hidden="true">→</span></a></div>
       <div class="hero-host"><span class="host-mark" aria-hidden="true">CS</span><p>Hosted by <strong>IEEE Computer Society</strong><br><span>Amrita Vishwa Vidyapeetham, Bengaluru</span></p></div>
     </div>
@@ -42,7 +42,7 @@
   <section class="voltage-band reveal" data-border-glow aria-labelledby="voltage-title">
     <div class="electric-emblem" data-electric-logo aria-hidden="true"><span class="electric-fallback">/0</span></div>
     <div class="voltage-copy"><p class="eyebrow">IEEE COMPUTER SOCIETY / DEBUGGING CHAMPIONSHIP</p><h2 id="voltage-title">Every line counts.<br><span>Make yours work.</span></h2><p>Read broken programs. Trace the failure. Commit a fix that holds up.</p></div>
-    <div class="voltage-stamp"><span>ROUND_01</span><strong>70<span>MIN</span></strong><span>SERVER-TIMED</span></div>
+    <div class="voltage-stamp"><span>ROUND_01</span><strong>{{ config.duration_minutes }}<span>MIN</span></strong><span>SERVER-TIMED</span></div>
   </section>
   <section class="public-section reveal" aria-labelledby="how-heading">
     <div class="section-heading"><div><p class="eyebrow">01 / HOW IT WORKS</p><h2 id="how-heading">Analyse. Debug. Fix. Exit 0.</h2></div><span class="section-annotation">FOUR STEPS. ONE CLEAN EXIT.</span></div>
@@ -50,7 +50,7 @@
   </section>
   <section class="public-section format-section reveal" id="format" aria-labelledby="format-heading">
     <div class="section-heading"><div><p class="eyebrow">02 / EVENT FORMAT</p><h2 id="format-heading">One round. Clear stages.</h2></div><span class="section-annotation">DEBUGGING DECIDES THE RANKINGS.</span></div>
-    <ol class="format-timeline">{% for title,tag,description in [('Debugging round','70 MIN','Find the faults. Submit your fixes.'),('Result verification','REVIEW','Submissions lock. Organizers verify.'),('Rapid fire quiz','FUN ROUND','Ten questions while the judges review.'),('Winner reveal','FINAL','Official debugging rankings, published.')] %}<li data-border-glow><span>0{{loop.index}}</span><div><h3>{{title}}</h3><p>{{description}}</p></div><span class="badge">{{tag}}</span></li>{% endfor %}</ol>
+    <ol class="format-timeline">{% for title,tag,description in [('Debugging round',config.duration_minutes ~ ' MIN','Find the faults. Submit your fixes.'),('Result verification','REVIEW','Submissions lock. Organizers verify.'),('Rapid fire quiz','7 MIN','Ten questions while the judges review.'),('Winner reveal','FINAL','Official debugging rankings, published.')] %}<li data-border-glow><span>0{{loop.index}}</span><div><h3>{{title}}</h3><p>{{description}}</p></div><span class="badge">{{tag}}</span></li>{% endfor %}</ol>
     <p class="format-note">Quiz points are separate. Your debugging score determines your final rank.</p>
   </section>
   <section class="public-section reveal" aria-labelledby="challenges-heading">

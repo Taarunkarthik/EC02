@@ -70,14 +70,19 @@ def init_db(force_reset=False):
 
     # Initialize event_state row if missing
     cur = conn.cursor()
+    cfg = Config.load_event_config()
+    dur = cfg.get("duration_minutes", 40)
     cur.execute("SELECT id FROM event_state WHERE id = 1")
     if not cur.fetchone():
-        cfg = Config.load_event_config()
-        dur = cfg.get("duration_minutes", 70)
         cur.execute("""
             INSERT INTO event_state (id, event_status, duration_minutes, remaining_seconds, is_paused)
             VALUES (1, 'WAITING', ?, ?, 0)
         """, (dur, dur * 60))
+    # Apply configuration changes before a round starts, preserving existing deadlines and progress.
+    cur.execute("""
+        UPDATE event_state SET duration_minutes = ?, remaining_seconds = ?
+        WHERE id = 1 AND event_status = 'WAITING' AND event_start_time IS NULL
+    """, (dur, dur * 60))
     
     # Versioned, non-destructive bank migration: keep assignments, scores and active flags.
     question_columns = {r["name"] for r in conn.execute("PRAGMA table_info(questions)")}
@@ -249,11 +254,11 @@ def _answer_summary(conn, team_id, question_id, points, include_submission=False
 
 
 def get_team_assigned_questions(team_id):
-    """Returns list of assigned questions with progression status for the team."""
+    """Returns progression without revealing upcoming question languages or titles."""
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT q.id, q.language, q.title, q.difficulty, q.points,
+        SELECT q.id, q.difficulty, q.points,
                qa.question_order, qa.is_unlocked, qa.is_completed, qa.is_abandoned
         FROM question_assignments qa
         JOIN questions q ON qa.question_id = q.id

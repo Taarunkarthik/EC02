@@ -7,7 +7,7 @@ from app import app
 from database import get_db_connection, get_client_question, init_db, register_team
 from event_manager import end_event, get_event_state, reset_event_data, start_event
 from scoring import process_submission, activate_rubber_duck, activate_git_revert, arm_double_commit
-from quiz import QUESTIONS
+from quiz import QUESTIONS, QUESTION_SECONDS
 
 
 @pytest.fixture
@@ -105,7 +105,7 @@ def test_safe_progress_and_malformed_json(client):
     progress = client.get("/api/team-progress").get_json()
     assert progress["total_questions"] == 30
     assert progress["questions"][0]["is_unlocked"] == 1
-    forbidden = {"bug_location", "expected_output", "cause", "correction", "hint", "code", "error_type"}
+    forbidden = {"bug_location", "expected_output", "cause", "correction", "hint", "code", "error_type", "language", "title"}
     assert not any(forbidden.intersection(question) for question in progress["questions"])
     for value in ([], "text", None):
         res = client.post("/api/submit-bug-fix", json=value)
@@ -146,7 +146,7 @@ def test_quiz_timeout_survives_refresh_and_answer_change(client):
     client.post("/api/quiz/start", json={})
     conn = get_db_connection()
     conn.execute("UPDATE quiz_sessions SET question_started_at = ? WHERE team_id = ?",
-                 ((datetime.now(timezone.utc) - timedelta(seconds=65)).isoformat(), team_id))
+                 ((datetime.now(timezone.utc) - timedelta(seconds=QUESTION_SECONDS + 5)).isoformat(), team_id))
     conn.commit()
     status = client.get("/api/quiz/status").get_json()["quiz"]
     assert status["current_question"]["id"] == "R02"
@@ -181,6 +181,50 @@ def test_fullscreen_signals_are_idempotent_and_reset_clears_rounds(client):
     assert conn.execute("SELECT COUNT(*) FROM team_activity").fetchone()[0] == 0
     assert conn.execute("SELECT generation FROM competition_controls").fetchone()[0] != generation
     conn.close()
+
+
+def test_quiz_seven_minute_deadline_and_all_ten_question_timeouts(client, monkeypatch):
+    join(client)
+    end_event()
+    admin(client)
+    client.post("/api/admin/quiz-action", json={"action": "open"})
+    start = datetime(2026, 10, 7, 10, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr("quiz._now", lambda: start)
+    quiz = client.post("/api/quiz/start", json={}).get_json()["quiz"]
+    assert quiz["duration_minutes"] == 7 and quiz["quiz_total"] == 10
+    assert quiz["remaining_seconds"] == 420 and quiz["question_remaining_seconds"] == 42
+
+    monkeypatch.setattr("quiz._now", lambda: start + timedelta(seconds=41))
+    quiz = client.post("/api/quiz/start", json={}).get_json()["quiz"]
+    assert quiz["current_question"]["number"] == 1 and quiz["question_remaining_seconds"] == 1
+    assert quiz["remaining_seconds"] == 379  # Restarting cannot renew either deadline.
+
+    monkeypatch.setattr("quiz._now", lambda: start + timedelta(seconds=42))
+    quiz = client.get("/api/quiz/status").get_json()["quiz"]
+    assert quiz["current_question"]["number"] == 2 and quiz["question_remaining_seconds"] == 42
+    assert quiz["answers"][0]["status"] == "unanswered"
+
+    monkeypatch.setattr("quiz._now", lambda: start + timedelta(seconds=419))
+    quiz = client.get("/api/quiz/status").get_json()["quiz"]
+    assert quiz["current_question"]["number"] == 10 and quiz["question_remaining_seconds"] == 1
+    monkeypatch.setattr("quiz._now", lambda: start + timedelta(seconds=420))
+    quiz = client.post("/api/quiz/answer", json={"question_id": "R10", "answer_index": 2}).get_json()["quiz"]
+    assert quiz["completed"] and quiz["answered_count"] == 10 and quiz["quiz_score"] == 0
+    assert quiz["current_question"] is None and quiz["remaining_seconds"] == 0
+
+
+def test_quiz_early_answer_keeps_seven_minute_session_deadline(client, monkeypatch):
+    join(client)
+    end_event()
+    admin(client)
+    client.post("/api/admin/quiz-action", json={"action": "open"})
+    start = datetime(2026, 10, 7, 10, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr("quiz._now", lambda: start)
+    client.post("/api/quiz/start", json={})
+    monkeypatch.setattr("quiz._now", lambda: start + timedelta(seconds=20))
+    quiz = client.post("/api/quiz/answer", json={"question_id": "R01", "answer_index": 1}).get_json()["quiz"]
+    assert quiz["current_question"]["number"] == 2 and quiz["question_remaining_seconds"] == 42
+    assert quiz["remaining_seconds"] == 400 and quiz["quiz_score"] == 1
 
 
 def test_override_validation_keeps_scores_finite_and_bounded(client):

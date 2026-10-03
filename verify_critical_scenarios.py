@@ -51,7 +51,7 @@ def run_critical_scenario_checks():
     assert st2["event_status"] == "LIVE"
     assert st2["event_end_time"] == end_time_orig
     assert abs(st1["remaining_seconds"] - st2["remaining_seconds"]) <= 1
-    print(f"[OK] PASS: Event LIVE with 70-min server clock. End time fixed at {end_time_orig}, timer not reset.")
+    print(f"[OK] PASS: Event LIVE with {st1['duration_minutes']}-min server clock. End time fixed at {end_time_orig}, timer not reset.")
 
     # --- Scenario 3: Open a question. Refresh. Confirm the same question remains assigned. ---
     print("\n[Scenario 3] Question assignment & Refresh persistence...")

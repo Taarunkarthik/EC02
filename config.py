@@ -27,7 +27,7 @@ class Config:
             return {
                 "event_name": "EXIT CODE 0",
                 "tagline": "Find the Bug. Fix the Code. Exit Clean.",
-                "duration_minutes": 70,
+                "duration_minutes": 40,
                 "team_min_size": 2,
                 "team_max_size": 3,
                 "expected_participants": 60,

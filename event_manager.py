@@ -24,7 +24,7 @@ def get_event_state():
     Survives page refresh, reload, and navigation.
     States:
       - 'WAITING': Before admin starts competition.
-      - 'LIVE': Active 70-minute competition.
+      - 'LIVE': Active debugging competition.
       - 'PAUSED': Temporarily paused.
       - 'COMPLETED': Competition concluded.
     """
@@ -35,7 +35,7 @@ def get_event_state():
 
     if not row:
         cfg = Config.load_event_config()
-        dur = cfg.get("duration_minutes", 70)
+        dur = cfg.get("duration_minutes", 40)
         conn.close()
         return {
             "event_status": "WAITING",
@@ -50,7 +50,7 @@ def get_event_state():
     now = datetime.now(timezone.utc)
     status = state.get("event_status", "WAITING")
     is_paused = bool(state.get("is_paused", 0))
-    remaining = state.get("remaining_seconds", 4200)
+    remaining = state.get("remaining_seconds", state.get("duration_minutes", 40) * 60)
 
     # If LIVE and not paused, compute dynamic remaining time from server clock
     if status == "LIVE" and not is_paused and state.get("event_end_time"):
@@ -71,7 +71,7 @@ def get_event_state():
                 if not changed:
                     conn.close()
                     return get_event_state()
-                log_admin_action("TIMER_EXPIRED", "70-minute event timer reached zero. Competition completed.")
+                log_admin_action("TIMER_EXPIRED", "Debugging timer reached zero. Competition completed.")
             else:
                 remaining = math.ceil(diff)
 
@@ -86,9 +86,9 @@ def get_event_state():
     return state
 
 def start_event():
-    """Starts the 70-minute competition."""
+    """Starts the debugging competition for the configured duration."""
     cfg = Config.load_event_config()
-    duration = cfg.get("duration_minutes", 70)
+    duration = cfg.get("duration_minutes", 40)
     now = datetime.now(timezone.utc)
     end_dt = now + timedelta(minutes=duration)
 
@@ -109,7 +109,7 @@ def start_event():
             WHERE id = 1
         """, (format_iso(now), format_iso(end_dt), duration, duration * 60))
         conn.commit()
-        log_admin_action("START_EVENT", f"Competition started. 70-minute timer active until {end_dt.isoformat()}.")
+        log_admin_action("START_EVENT", f"Competition started. {duration}-minute timer active until {end_dt.isoformat()}.")
         return True, "Competition started! All teams can now access challenges."
     except Exception as e:
         conn.rollback()
@@ -211,7 +211,7 @@ def reset_event_data(confirmation):
         return False, "Confirmation failed. You must type 'RESET EVENT' exactly to proceed."
 
     cfg = Config.load_event_config()
-    dur = cfg.get("duration_minutes", 70)
+    dur = cfg.get("duration_minutes", 40)
 
     conn = get_db_connection()
     cur = conn.cursor()

@@ -1039,7 +1039,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"\n==========================================")
     print(f" EXIT CODE 0 -- IEEE COMPUTER SOCIETY")
-    print(f" 70-Minute Competitive Debugging Arena")
+    print(f" {Config.load_event_config()['duration_minutes']}-Minute Competitive Debugging Arena")
     print(f" Access URL: http://127.0.0.1:{port}")
     print(f" Admin URL:  http://127.0.0.1:{port}/admin/login")
     print(f"==========================================\n")
