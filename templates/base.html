@@ -12,9 +12,13 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/interactions.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='dist/react-bits.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/black-red.css') }}">
+  {% if session.get('team_id') and not request.path.startswith('/admin') and request.path != '/blocked' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/participant-guard.css') }}">
+  {% endif %}
   {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
+  <div class="site-dot-grid" data-site-dot-grid aria-hidden="true"></div>
   <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="navbar">
     <a href="{{ url_for('index') }}" class="nav-brand" aria-label="EXIT CODE 0 home">
@@ -51,11 +55,25 @@
   <dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-title">
     <form method="dialog"><span class="eyebrow">CONFIRM ACTION</span><h2 id="confirm-title">Continue?</h2><p id="confirm-message" class="muted"></p><div class="modal-actions"><button value="cancel" class="btn btn-secondary" autofocus>Cancel</button><button id="confirm-accept" value="confirm" class="btn btn-primary">Confirm</button></div></form>
   </dialog>
+  {% if session.get('team_id') and not request.path.startswith('/admin') and request.path != '/blocked' %}
+  <dialog id="participant-gate" class="participant-gate" aria-labelledby="participant-gate-title" aria-describedby="participant-gate-message" data-team="{{ session.get('team_id') }}" data-generation="{{ session.get('generation', '') }}">
+    <span class="eyebrow">PARTICIPANT SESSION</span><div class="guard-icon" aria-hidden="true">⛶</div>
+    <h2 id="participant-gate-title">Enter fullscreen</h2>
+    <p id="participant-gate-message">Stay in fullscreen and keep this window focused until you sign out. Switching apps or tabs, or exiting fullscreen, triggers a warning. A second violation blocks this account.</p>
+    <span id="participant-violations" class="guard-count">0 / 2 violations</span>
+    <div class="guard-actions"><button id="participant-enter" class="btn btn-primary" type="button">Enter fullscreen →</button><a href="{{ url_for('logout') }}" class="text-link">Sign out</a></div>
+    <p id="participant-gate-error" role="alert"></p>
+    <noscript><p>JavaScript and fullscreen are required to participate. Enable JavaScript and reload.</p></noscript>
+  </dialog>
+  {% endif %}
   <script id="initial-event-state" type="application/json">{{ event_state|tojson }}</script>
   <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/timer.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/interactions.js') }}" defer></script>
   <script src="{{ url_for('static', filename='dist/react-bits.js') }}" defer></script>
+  {% if session.get('team_id') and not request.path.startswith('/admin') and request.path != '/blocked' %}
+  <script src="{{ url_for('static', filename='js/participant-guard.js') }}" defer></script>
+  {% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

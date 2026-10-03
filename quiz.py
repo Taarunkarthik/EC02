@@ -6,16 +6,16 @@ QUIZ_MINUTES = 10
 QUESTION_SECONDS = 60
 # Kept out of static assets and participant HTML/JSON.
 QUESTIONS = [
-    ("R01", "Which data structure follows last in, first out (LIFO)?", ["Queue", "Stack", "Graph", "Heap"], 1),
-    ("R02", "What is the decimal value of binary 1010?", ["8", "9", "10", "12"], 2),
-    ("R03", "Which Git command creates a new branch and switches to it?", ["git status", "git switch -c feature", "git fetch feature", "git merge feature"], 1),
-    ("R04", "What does an HTTP 404 response mean?", ["Request succeeded", "Server is restarting", "Resource not found", "Authentication succeeded"], 2),
-    ("R05", "What is the worst-case time complexity of binary search on a sorted array?", ["O(1)", "O(log n)", "O(n)", "O(n²)"], 1),
-    ("R06", "In Python, what does len([0, 1, 2, 3]) return?", ["3", "4", "5", "An error"], 1),
-    ("R07", "Which condition stops a recursive function from calling itself forever?", ["A base case", "A global variable", "A compiler flag", "A print statement"], 0),
-    ("R08", "Which SQL clause filters rows before grouping?", ["ORDER BY", "HAVING", "WHERE", "LIMIT"], 2),
-    ("R09", "What is the result of the Boolean expression true AND false?", ["true", "false", "null", "undefined"], 1),
-    ("R10", "In conventional command-line programs, exit status 0 usually indicates…", ["An infinite loop", "A syntax error", "Successful completion", "An unavailable file"], 2),
+    ('R01', 'In Python, what does print(7 // 2) display?', ['3.5', '3', '4', '2'], 1),
+    ('R02', 'In C, what is printed by printf("%d", 7 % 3)?', ['2', '3', '1', '0'], 2),
+    ('R03', 'In Python, what does print("3" * 2) display?', ['6', '33', '32', 'An error'], 1),
+    ('R04', 'In C, which operator tests whether a and b are equal?', ['a = b', 'a != b', 'a == b', 'a <= b'], 2),
+    ('R05', 'In Python, how many times does for i in range(1, 4): run?', ['4', '3', '2', '5'], 1),
+    ('R06', 'In C, int values[] = {4, 8, 12}; What is values[1]?', ['4', '8', '12', '1'], 1),
+    ('R07', 'In Python, what does print(bool("False")) display?', ['True', 'False', 'None', 'An error'], 0),
+    ('R08', 'In C, what does printf("%d", 2 + 3 * 4) display?', ['20', '24', '14', '9'], 2),
+    ('R09', 'In Python, what does print(len([0, False, ""])) display?', ['0', '3', '2', '1'], 1),
+    ('R10', 'In C, int x = 5; x += 2; What is x now?', ['2', '5', '7', '10'], 2),
 ]
 
 
@@ -60,7 +60,16 @@ def _snapshot(cur, team_id, now):
         question = {"id": qid, "prompt": prompt, "options": choices, "number": count + 1}
         remaining = max(0, int((_parse(session["ends_at"]) - now).total_seconds()))
         question_remaining = max(0, min(remaining, int((_parse(session["question_started_at"]) + timedelta(seconds=QUESTION_SECONDS) - now).total_seconds())))
-    return {"status": status, "started": session is not None, "completed": completed,
+    saved = {row["question_id"]: row for row in cur.execute("SELECT question_id, answer_index, points FROM quiz_answers WHERE team_id = ?", (team_id,))}
+    review = []
+    for number, (qid, prompt, options, _) in enumerate(QUESTIONS, 1):
+        if qid in saved:
+            answer = saved[qid]
+            review.append({"question_id": qid, "number": number, "prompt": prompt,
+                           "selected_answer": options[answer["answer_index"]] if answer["answer_index"] is not None else None,
+                           "status": "unanswered" if answer["answer_index"] is None else "correct" if answer["points"] else "incorrect",
+                           "points": answer["points"]})
+    return {"status": status, "started": session is not None, "completed": completed, "answers": review,
             "quiz_score": score, "quiz_total": len(QUESTIONS), "answered_count": count,
             "remaining_seconds": remaining, "question_remaining_seconds": question_remaining,
             "current_question": question}

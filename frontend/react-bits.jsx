@@ -40,8 +40,10 @@ for (const host of document.querySelectorAll('[data-tech-text]')) {
 for (const host of document.querySelectorAll('[data-electric-logo]')) {
   createRoot(host).render(<ElectricLogo src="/static/exit-mark.svg" label="Exit code zero" color="#ffb2bd" glowColor="#ff203d" scale={0.66} intensity={1.25} glow={1.4} thickness={1.3} strands={3} speed={1.15} crackle={0.85} flicker={0.12} arcs={0.7} />);
 }
-for (const host of document.querySelectorAll('[data-dot-grid]')) {
-  createRoot(host).render(<DotGrid eventTarget={host.parentElement} dotSize={3} gap={21} baseColor="#56202c" activeColor="#ff344b" proximity={140} speedTrigger={70} shockRadius={180} shockStrength={3} resistance={1000} returnDuration={1.1} maxDots={1100} />);
+// One viewport-sized field follows every page without growing with document height.
+const siteDots = document.querySelector('[data-site-dot-grid]');
+if (siteDots) {
+  createRoot(siteDots).render(<DotGrid eventTarget={document} dotSize={2.6} gap={24} baseColor="#54232d" activeColor="#ff4055" proximity={135} speedTrigger={70} shockRadius={170} shockStrength={2.8} resistance={1000} returnDuration={1.1} maxDots={1600} maxDpr={1.5} />);
 }
 // Each surface uses the event palette; the editor keeps its original geometry.
 const glowCards = new Set(document.querySelectorAll('[data-border-glow], .auth-panel, .lobby-status, .team-card, .lobby-facts, .standings-card, .result-receipt, .quiz-intro, .quiz-play, .quiz-finish, .admin-stat-card, .admin-page .card'));

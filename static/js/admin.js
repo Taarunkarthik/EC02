@@ -13,6 +13,7 @@
     submissions: ['Submissions', 'Every fix, accounted for', 'Inspect answers, review scoring and record judging decisions.'],
     rankings: ['Leaderboard', 'The official standings', 'Review debugging scores and publish the final results.'],
     quiz: ['Quiz', 'Keep the room thinking', 'A separate rapid-fire round while judges verify the results.'],
+    feedback: ['Feedback', 'Hear from participants', 'Six quiz ratings and optional notes, saved per team.'],
     security: ['Security', 'A clearer view of activity', 'Browser activity signals for informed organizer review.'],
     settings: ['Settings', 'Event settings', 'Competition configuration, exports and data management.']
   };
@@ -72,6 +73,7 @@
     $('#admin-page-title').replaceChildren(document.createTextNode(title), element('span', 'admin-title-dot', '.'));
     setText('#admin-page-description', description);
     if (currentPanel === 'rankings') refreshLeaderboard();
+    if (currentPanel === 'feedback') refreshFeedback();
   }
   function setBusy(button, busy, label) {
     if (!button) return;
@@ -166,7 +168,7 @@
       feed.replaceChildren(empty);
       return;
     }
-    const labels = { submission: 'submitted', fullscreen_exit: 'exited fullscreen', fullscreen_enter: 'entered fullscreen', tab_hidden: 'switched away from the arena', window_blur: 'moved focus away', window_focus: 'returned to the arena', window_visible: 'returned to the arena', tab_visible: 'returned to the arena' };
+    const labels = { session_violation: 'received a fullscreen/focus violation', submission: 'submitted', fullscreen_exit: 'exited fullscreen', fullscreen_enter: 'entered fullscreen', tab_hidden: 'switched away from the arena', window_blur: 'moved focus away', window_focus: 'returned to the arena', window_visible: 'returned to the arena', tab_visible: 'returned to the arena' };
     const rows = events.slice(0, 20).map(event => {
       const row = element('div', 'admin-activity-item');
       row.dataset.eventType = event.event_type;
@@ -193,11 +195,26 @@
       activity.title = parseDate(team.last_seen)?.toLocaleString() || 'No activity reported';
       const status = element('td');
       const hasSignals = focus + tabs + fullscreen > 0;
-      status.append(element('span', `badge ${hasSignals ? 'admin-badge-warning' : 'admin-badge-muted'}`, hasSignals ? 'Review signals' : 'No flags'));
+      status.append(element('span', `badge ${team.blocked || team.violations ? 'admin-badge-warning' : 'admin-badge-muted'}`, team.blocked ? 'Blocked · 2 / 2' : team.violations ? `Warning · ${team.violations} / 2` : hasSignals ? 'Review signals' : 'No flags'));
       row.append(identity, element('td', 'mono', focus), element('td', 'mono', tabs), element('td', 'mono', fullscreen), activity, status);
       return row;
     });
     target.replaceChildren(...rows);
+  }
+  async function refreshFeedback() {
+    try {
+      const data = await request('/api/admin/feedback');
+      const rows = data.responses || [];
+      setText('#admin-feedback-count', `${rows.length} ${rows.length === 1 ? 'response' : 'responses'}`);
+      if (!rows.length) return;
+      $('#admin-feedback-body').replaceChildren(...rows.map(response => {
+        const row = element('tr');
+        row.append(element('td', '', response.team_name));
+        ['clarity', 'difficulty', 'interface', 'pacing', 'enjoyment', 'overall'].forEach(key => row.append(element('td', 'mono', `${response.ratings[key]} / 5`)));
+        const note = element('td', '', response.note || '—'); note.style.whiteSpace = 'pre-wrap'; note.style.minWidth = '220px'; row.append(note);
+        return row;
+      }));
+    } catch (error) { setConnected(false); }
   }
   async function refreshLeaderboard() {
     try {
@@ -230,6 +247,7 @@
       updateRoundControls();
       setConnected(true);
       if (currentPanel === 'rankings') await refreshLeaderboard();
+      if (currentPanel === 'feedback') await refreshFeedback();
     } catch (error) {
       setConnected(false);
       if (!dashboard) {

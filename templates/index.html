@@ -5,11 +5,11 @@
 {% block content %}
 <div class="page-shell public-shell">
   <section class="landing-hero" aria-labelledby="hero-heading">
-    <div class="hero-copy"><div class="hero-dot-field" data-dot-grid aria-hidden="true"></div>
+    <div class="hero-copy">
       <p class="eyebrow"><span class="blue-dot"></span> IEEE WEEK 2026 <span class="eyebrow-divider">/</span> TECHNICAL EVENT</p>
       <h1 id="hero-heading" class="tech-hero-heading"><span class="tech-fallback">EXIT CODE <em>0</em></span><span class="tech-title" data-tech-text="EXIT CODE 0" aria-hidden="true"></span></h1>
       <h2 class="hero-tagline">Find the bug.<br>Fix the code.<br><span>Exit clean.</span></h2>
-      <p class="hero-description">70 minutes. 30 debugging challenges. Python, C and Java. Work in teams of two or three to trace the failures and submit precise fixes.</p>
+      <p class="hero-description">70 minutes. 30 debugging challenges. Python and C. Work in teams of two or three to trace the failures and submit precise fixes.</p>
       <div class="action-row"><a class="btn btn-primary btn-large" href="{{ '/arena' if session.get('team_id') else '/register' }}">Enter the arena <span aria-hidden="true">↗</span></a><a class="btn btn-secondary btn-large" href="/leaderboard">View leaderboard <span aria-hidden="true">→</span></a></div>
       <div class="hero-host"><span class="host-mark" aria-hidden="true">CS</span><p>Hosted by <strong>IEEE Computer Society</strong><br><span>Amrita Vishwa Vidyapeetham, Bengaluru</span></p></div>
     </div>
@@ -54,7 +54,7 @@
     <p class="format-note">Quiz points are separate. Your debugging score determines your final rank.</p>
   </section>
   <section class="public-section reveal" aria-labelledby="challenges-heading">
-    <div class="section-heading"><div><p class="eyebrow">03 / THE QUESTION BANK</p><h2 id="challenges-heading">Six kinds of broken.</h2></div><span class="section-annotation">PYTHON / C / JAVA</span></div>
+    <div class="section-heading"><div><p class="eyebrow">03 / THE QUESTION BANK</p><h2 id="challenges-heading">Six kinds of broken.</h2></div><span class="section-annotation">PYTHON / C</span></div>
     <div class="challenge-grid">{% for symbol,name,description,code in [('{}','Syntax errors','One character can stop everything.','if (x == 1'),('≠','Logical errors','Runs fine. Answers wrong.','total / (n - 1)'),('!','Runtime errors','It works. Until it doesn’t.','arr[len(arr)]'),('∅','Edge cases','Empty, zero, one, or too many.','nums = []'),('O(n)','Algorithmic mistakes','Right idea. Wrong procedure.','mid = (lo + hi) / 2'),('>_','Output prediction','Trace every step of the fixed code.','EXIT CODE: 0')] %}<article data-border-glow><span class="challenge-symbol" aria-hidden="true">{{symbol}}</span><h3>{{name}}</h3><p>{{description}}</p><code>{{code}}</code></article>{% endfor %}</div>
   </section>
   <section class="public-section live-preview-section reveal" aria-labelledby="live-heading">

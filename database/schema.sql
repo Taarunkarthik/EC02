@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS quiz_answers (
     FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
 );
 
--- Organizer-only activity signals (focus / fullscreen). Flags only: never auto-punish.
+-- Participant activity signals; fullscreen violations are enforced separately.
 CREATE TABLE IF NOT EXISTS activity_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     team_id TEXT NOT NULL,
@@ -160,3 +160,35 @@ CREATE TABLE IF NOT EXISTS activity_events (
     FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_activity_team ON activity_events(team_id);
+
+-- Separate enforcement from historical organizer activity so old signals do not punish teams.
+CREATE TABLE IF NOT EXISTS participant_security (
+    team_id TEXT PRIMARY KEY REFERENCES teams(id) ON DELETE CASCADE,
+    violations INTEGER NOT NULL DEFAULT 0,
+    blocked INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS fullscreen_sessions (
+    id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    is_fullscreen INTEGER NOT NULL DEFAULT 0,
+    active_event_id TEXT,
+    document_id TEXT,
+    document_started_at REAL NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS fullscreen_events (
+    team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    event_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(team_id, event_id)
+);
+CREATE TABLE IF NOT EXISTS quiz_feedback (
+    team_id TEXT PRIMARY KEY REFERENCES teams(id) ON DELETE CASCADE,
+    ratings_json TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    submitted_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS data_migrations (
+    name TEXT PRIMARY KEY,
+    applied_at TEXT DEFAULT CURRENT_TIMESTAMP
+);

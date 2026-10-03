@@ -24,6 +24,7 @@ def join(client, name="Integrity Team"):
     with client.session_transaction() as session:
         session.clear()
         session["team_id"] = team_id
+    assert client.post("/api/activity", json={"event_type": "fullscreen_enter", "event_id": "test-login-" + team_id}).status_code == 200
     return team_id
 
 
@@ -67,7 +68,7 @@ def test_duplicate_network_retry_preserves_double_commit_and_timestamp(client):
     conn.commit()
     worse = answer()
     worse.update(cause="", correction="", expected_output="")
-    assert process_submission(team_id, "Q01", worse)[1] is None
+    assert "already been answered" in process_submission(team_id, "Q01", worse)[1]
     row = conn.execute("SELECT score, last_submission_time FROM scores").fetchone()
     assert row["score"] == first["new_score"]
     assert row["last_submission_time"] == "2026-10-07 10:00:00"
@@ -161,12 +162,12 @@ def test_quiz_timeout_survives_refresh_and_answer_change(client):
     conn.close()
 
 
-def test_activity_is_an_organizer_signal_and_reset_clears_rounds(client):
+def test_fullscreen_signals_are_idempotent_and_reset_clears_rounds(client):
     join(client)
     generation = client.get("/api/team-progress").get_json()["generation"]
     start_event()
-    first = client.post("/api/activity", json={"event_type": "fullscreen_exit"}).get_json()
-    second = client.post("/api/activity", json={"event_type": "fullscreen_exit"}).get_json()
+    first = client.post("/api/activity", json={"event_type": "fullscreen_exit", "event_id": "same-exit"}).get_json()
+    second = client.post("/api/activity", json={"event_type": "fullscreen_exit", "event_id": "same-exit"}).get_json()
     assert first["recorded"] and not second["recorded"]
     admin(client)
     data = client.get("/api/admin/dashboard-data").get_json()

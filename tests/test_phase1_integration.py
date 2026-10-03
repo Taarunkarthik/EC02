@@ -17,6 +17,10 @@ def test_twenty_teams_submit_independently_and_network_retries_are_idempotent():
             with client.session_transaction() as session:
                 session["team_id"] = team_id
                 session["generation"] = generation
+            entered = client.post('/api/activity', json={
+                'event_type': 'fullscreen_enter', 'event_id': f'enter-{team_id}',
+            })
+            assert entered.status_code == 200
             payload = dict(question_id="Q01", request_id="same-request-per-team",
                            error_location="3", error_type="Logical Error", expected_output="10",
                            cause="The loop stops before the last element.", correction="Use range(len(numbers))")

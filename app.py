@@ -22,6 +22,8 @@ from event_manager import (
     end_event, reset_event_data
 )
 
+from participant_policy import guard_snapshot, fullscreen_signal, feedback_snapshot, save_feedback, FEEDBACK_QUESTIONS
+
 from quiz import quiz_snapshot, start_quiz, answer_quiz, QUESTIONS as QUIZ_QUESTIONS, QUIZ_MINUTES
 
 app = Flask(__name__)
@@ -53,17 +55,34 @@ def team_required(f):
         team = conn.execute("SELECT is_active FROM teams WHERE id = ?", (team_id,)).fetchone()
         generation = conn.execute("SELECT generation FROM competition_controls WHERE id = 1").fetchone()[0]
         conn.close()
+        security = guard_snapshot(team_id) if team else None
+        if security and security["blocked"]:
+            if request.path.startswith("/api/"):
+                return jsonify(success=False, blocked=True, error="Account blocked after two fullscreen or focus violations. Contact an organizer.", **{k: security[k] for k in ("violations", "limit")}), 403
+            return redirect(url_for("participant_blocked"))
         if not team or not team["is_active"] or session.get("generation", generation) != generation:
             session.clear()
             if request.path.startswith("/api/"):
                 return jsonify(success=False, error="Your team session is no longer active. Contact an organizer."), 403
             return redirect(url_for("register"))
+        protected = request.path == "/api/submit-bug-fix" or request.path.startswith("/api/powerup/") or request.path in ("/api/quiz/start", "/api/quiz/answer", "/api/quiz/feedback")
+        if protected and not security["is_fullscreen"]:
+            return jsonify(success=False, fullscreen_required=True, error="Enter fullscreen to continue."), 403
         return f(*args, **kwargs)
     return decorated_function
 
 
 @app.before_request
 def validate_request():
+    team_id = session.get("team_id")
+    if team_id and not request.path.startswith(("/static/", "/admin", "/api/admin")) and request.path not in ("/logout", "/blocked", "/register"):
+        conn = get_db_connection()
+        blocked = conn.execute("SELECT blocked FROM participant_security WHERE team_id = ?", (team_id,)).fetchone()
+        conn.close()
+        if blocked and blocked[0]:
+            if request.path.startswith("/api/"):
+                return jsonify(success=False, blocked=True, violations=2, limit=2, error="Account blocked after two fullscreen or focus violations. Contact an organizer."), 403
+            return redirect(url_for("participant_blocked"))
     if request.method in ("POST", "PUT", "PATCH", "DELETE"):
         origin = request.headers.get("Origin")
         if request.headers.get("Sec-Fetch-Site") == "cross-site" or (origin and urlsplit(origin).netloc != request.host):
@@ -136,11 +155,13 @@ def register():
             cur = conn.cursor()
             cur.execute("""
                 SELECT * FROM teams 
-                WHERE (UPPER(id) = UPPER(?) OR UPPER(name) = UPPER(?)) AND is_active = 1
+                WHERE (UPPER(id) = UPPER(?) OR UPPER(name) = UPPER(?))
             """, (lookup, lookup))
             team = cur.fetchone()
             conn.close()
 
+            if team and not team["is_active"]:
+                return render_template("register.html", error="This account is blocked or disabled. Contact an organizer before signing in again."), 403
             if not team:
                 return render_template("register.html", error="Team not found. Please verify your Team ID or register your team.")
 
@@ -191,6 +212,8 @@ def login():
 
 @app.route("/logout")
 def logout():
+    # Intervals hold only enforcement tokens; keep them to reconcile an offline
+    # departure after a later sign-in. The signed-in cookie is still cleared.
     session.clear()
     return redirect(url_for("index"))
 
@@ -252,7 +275,7 @@ def arena():
         WHERE qa.team_id = ? AND qa.is_abandoned = 0
         ORDER BY qa.question_order ASC
     """, (team_id,))
-    assigned_questions = cur.fetchall()
+    assigned_questions = get_team_assigned_questions(team_id)
 
     # Select active question: by ?q=Qxx or first unlocked uncompleted
     req_qid = request.args.get("q")
@@ -277,7 +300,7 @@ def arena():
     client_q = None
     if current_question:
         cur.execute("SELECT id, language, title, difficulty, points, code FROM questions WHERE id = ?", (current_question["id"],))
-        client_q = cur.fetchone()
+        client_q = get_client_question(team_id, current_question["id"])
 
     # Fetch power-ups status
     cur.execute("SELECT * FROM powerups WHERE team_id = ?", (team_id,))
@@ -340,9 +363,12 @@ def result():
     ranking = _leaderboard_rows()
     final_rank = next((i for i, row in enumerate(ranking, 1) if row["id"] == team_id), None) if published else None
     quiz = quiz_snapshot(team_id) if team else {"quiz_score": 0, "quiz_total": len(QUIZ_QUESTIONS)}
-    total_questions = len(get_team_assigned_questions(team_id)) if team else 0
+    assigned = get_team_assigned_questions(team_id) if team else []
+    total_questions = len(assigned)
+    debug_review = [get_client_question(team_id, question["id"]) for question in assigned if question["is_answered"]]
+    debug_review = [question for question in debug_review if question]
     return render_template("result.html", team=team, score=score, winners=winners if published else [],
-                           final_rank=final_rank, total_questions=total_questions, quiz=quiz,
+                           final_rank=final_rank, total_questions=total_questions, quiz=quiz, debug_review=debug_review,
                            quiz_score=quiz["quiz_score"], quiz_total=quiz["quiz_total"], results_published=published)
 
 # --- JSON API Endpoints ---
@@ -677,7 +703,12 @@ def api_admin_toggle_team():
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("UPDATE teams SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?", (team_id,))
-    if cur.rowcount == 0:
+    changed = cur.rowcount
+    active = cur.execute("SELECT is_active FROM teams WHERE id = ?", (team_id,)).fetchone()
+    if active and active[0]:
+        cur.execute("UPDATE participant_security SET blocked = 0, violations = 0 WHERE team_id = ?", (team_id,))
+        cur.execute("UPDATE fullscreen_sessions SET is_fullscreen = 0 WHERE team_id = ?", (team_id,))
+    if changed == 0:
         conn.close()
         return jsonify(success=False, error="Team not found."), 404
     conn.commit()
@@ -820,28 +851,48 @@ def api_team_progress():
                    event_status=state["event_status"], remaining_seconds=state["remaining_seconds"])
 
 
+@app.route("/blocked")
+def participant_blocked():
+    if not session.get("team_id"):
+        return redirect(url_for("register"))
+    return render_template("blocked.html")
+
+
+@app.route("/api/fullscreen/status")
+@team_required
+def api_fullscreen_status():
+    return jsonify(success=True, **guard_snapshot(session["team_id"]))
+
+
 @app.route("/api/activity", methods=["POST"])
 @team_required
 def api_activity():
-    event_type = request.get_json().get("event_type", request.get_json().get("type"))
+    data = request.get_json()
+    event_type = data.get("event_type", data.get("type"))
     event_type = {"focus_lost": "window_blur", "focus_regained": "window_focus", "tab_visible": "window_visible"}.get(event_type, event_type) if isinstance(event_type, str) else event_type
-    allowed = {"fullscreen_exit", "fullscreen_enter", "tab_hidden", "window_blur", "window_focus", "window_visible"}
+    allowed = {"fullscreen_exit", "fullscreen_enter", "fullscreen_leave", "tab_hidden", "window_blur", "window_focus", "window_visible"}
     if not isinstance(event_type, str) or event_type not in allowed:
         return jsonify(success=False, error="Unrecognized activity signal."), 400
-    if get_event_state()["event_status"] not in ("LIVE", "PAUSED"):
-        return jsonify(success=True, recorded=False)
+    if event_type.startswith("fullscreen_") or event_type in {"window_blur", "tab_hidden"}:
+        event_id = data.get("event_id")
+        if not isinstance(event_id, str) or not 1 <= len(event_id) <= 80:
+            return jsonify(success=False, error="Competition activity requires a unique event identifier."), 400
+        activation_id, document_id = data.get("activation_id"), data.get("document_id")
+        if any(value is not None and (not isinstance(value, str) or not 1 <= len(value) <= 80) for value in (activation_id, document_id)):
+            return jsonify(success=False, error="Invalid competition session identifier."), 400
+        document_started_at = data.get("document_started_at", 0)
+        if type(document_started_at) not in (int, float) or not math.isfinite(document_started_at) or document_started_at < 0:
+            return jsonify(success=False, error="Invalid document start time."), 400
+        return jsonify(success=True, **fullscreen_signal(session["team_id"], event_type, event_id, activation_id, document_id, document_started_at))
     conn = get_db_connection()
     try:
-        conn.execute("BEGIN IMMEDIATE")
-        count = conn.execute("SELECT COUNT(*) FROM team_activity WHERE team_id = ?", (session["team_id"],)).fetchone()[0]
         recent = conn.execute("SELECT 1 FROM team_activity WHERE team_id = ? AND event_type = ? AND created_at >= datetime('now', '-2 seconds') LIMIT 1", (session["team_id"], event_type)).fetchone()
-        recorded = count < 2000 and not recent
-        if recorded:
+        if not recent:
             record_activity(session["team_id"], event_type, cur=conn.cursor())
         conn.commit()
     finally:
         conn.close()
-    return jsonify(success=True, recorded=bool(recorded))
+    return jsonify(success=True, recorded=not bool(recent))
 
 
 @app.route("/quiz")
@@ -857,6 +908,8 @@ def quiz():
 
 
 def _quiz_response(snapshot):
+    snapshot["feedback"] = feedback_snapshot(session["team_id"])
+    snapshot["feedback_questions"] = FEEDBACK_QUESTIONS
     return jsonify(success=True, quiz=snapshot, event_status=get_event_state()["event_status"],
                    results_published=bool(get_competition_controls()["results_published"]))
 
@@ -887,6 +940,28 @@ def api_quiz_answer():
     return _quiz_response(snapshot)
 
 
+@app.route("/api/quiz/feedback", methods=["POST"])
+@team_required
+def api_quiz_feedback():
+    quiz_snapshot(session["team_id"])  # Persist any final question timeout.
+    feedback, error = save_feedback(session["team_id"], request.get_json())
+    if error:
+        return jsonify(success=False, error=error), 400
+    return jsonify(success=True, feedback=feedback)
+
+
+@app.route("/api/admin/feedback")
+@admin_required
+def api_admin_feedback():
+    conn = get_db_connection()
+    rows = [dict(row) for row in conn.execute("SELECT f.*, t.name AS team_name FROM quiz_feedback f JOIN teams t ON t.id = f.team_id ORDER BY submitted_at DESC")]
+    conn.close()
+    import json
+    for row in rows:
+        row["ratings"] = json.loads(row.pop("ratings_json"))
+    return jsonify(success=True, questions=FEEDBACK_QUESTIONS, responses=rows)
+
+
 @app.route("/api/admin/quiz-action", methods=["POST"])
 @admin_required
 def api_admin_quiz_action():
@@ -904,8 +979,6 @@ def api_admin_quiz_action():
         if action == "close" and current != "OPEN":
             return jsonify(success=False, error="The quiz is not open."), 400
         conn.execute("UPDATE competition_controls SET quiz_status = ? WHERE id = 1", ("OPEN" if action == "open" else "CLOSED",))
-        if action == "close":
-            conn.execute("UPDATE quiz_sessions SET completed_at = ? WHERE completed_at IS NULL", (datetime.now(timezone.utc).isoformat(),))
         conn.commit()
     finally:
         conn.close()
@@ -948,8 +1021,10 @@ def api_admin_dashboard_data():
             SUM(CASE WHEN a.event_type = 'fullscreen_exit' THEN 1 ELSE 0 END) AS fullscreen_exits,
             SUM(CASE WHEN a.event_type = 'tab_hidden' THEN 1 ELSE 0 END) AS tab_switches,
             SUM(CASE WHEN a.event_type = 'window_blur' THEN 1 ELSE 0 END) AS focus_losses,
-            MAX(a.created_at) AS last_seen
-            FROM teams t LEFT JOIN team_activity a ON a.team_id = t.id GROUP BY t.id ORDER BY t.name""")]
+            MAX(a.created_at) AS last_seen, COALESCE(ps.blocked, 0) AS blocked,
+            COALESCE(ps.violations, 0) AS violations
+            FROM teams t LEFT JOIN team_activity a ON a.team_id = t.id
+            LEFT JOIN participant_security ps ON ps.team_id = t.id GROUP BY t.id ORDER BY t.name""")]
         controls = dict(conn.execute("SELECT * FROM competition_controls WHERE id = 1").fetchone())
         quiz_data = {"status": controls["quiz_status"], "question_count": len(QUIZ_QUESTIONS), "duration_minutes": QUIZ_MINUTES,
                      "participants": conn.execute("SELECT COUNT(*) FROM quiz_sessions").fetchone()[0],

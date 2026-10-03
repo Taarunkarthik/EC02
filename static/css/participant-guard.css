@@ -1,0 +1,8 @@
+.participant-gate { width: min(92vw, 510px); padding: clamp(24px, 5vw, 40px); border: 2px solid #ff343e; border-radius: 12px; color: #f4f4f4; background: #0b0b0d; box-shadow: 0 0 0 1px #ff343e66, 0 0 40px #ff182c38; }
+.participant-gate::backdrop { background: rgb(0 0 0 / .94); }
+.participant-gate .guard-icon { font-size: 36px; color: #ff414b; }
+.participant-gate h2 { margin: 14px 0; font-size: clamp(25px, 5vw, 34px); }
+.participant-gate p { line-height: 1.65; color: #c7c7cf; }
+.participant-gate .guard-count { display: inline-block; margin: 12px 0 20px; padding: 6px 12px; border: 1px solid #ed354555; color: #ff7d85; font-family: var(--font-mono, monospace); }
+.participant-gate .guard-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; }
+.participant-gate #participant-gate-error { color: #ff969b; font-size: 13px; margin-top: 14px; }

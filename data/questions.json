@@ -11,35 +11,74 @@
     "cause": "The loop stops before processing the last element due to len(numbers) - 1.",
     "correction": "Change 'range(len(numbers) - 1)' to 'range(len(numbers))' or iterate directly with 'for n in numbers:'.",
     "points": 20,
-    "hint": "Check the upper limit of the range function."
+    "hint": "Check the upper limit of the range function.",
+    "cause_keywords": [
+      "loop",
+      "last",
+      "element",
+      "range",
+      "boundary"
+    ],
+    "correction_keywords": [
+      "range",
+      "len",
+      "numbers",
+      "iterate",
+      "elements"
+    ]
   },
   {
     "id": "Q02",
     "language": "C",
     "title": "Unterminated Statement",
     "difficulty": "Easy",
-    "code": "#include <stdio.h>\n\nint main() {\n    int count = 10\n    printf(\"Count is %d\\n\", count);\n    return 0;\n}",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    int count = 10\n    printf(\"Count is %d\\n\", count);\n    return 0;\n}",
     "error_type": "Syntax Error",
     "bug_location": "Line 4",
     "expected_output": "Count is 10",
     "cause": "The variable declaration statement is missing a terminating semicolon.",
     "correction": "Add a semicolon ';' at the end of line 4: 'int count = 10;'",
     "points": 20,
-    "hint": "In C, every statement must end with a delimiter."
+    "hint": "In C, every statement must end with a delimiter.",
+    "cause_keywords": [
+      "declaration",
+      "missing",
+      "semicolon",
+      "statement"
+    ],
+    "correction_keywords": [
+      "semicolon",
+      "count",
+      "int",
+      "declaration"
+    ]
   },
   {
     "id": "Q03",
-    "language": "Java",
-    "title": "Mismatched Braces Scope",
+    "language": "Python",
+    "title": "Unclosed Print Call",
     "difficulty": "Easy",
-    "code": "public class Main {\n    public static void main(String[] args) {\n        System.out.println(\"System Ready\");\n    \n}",
+    "code": "message = \"System Ready\"\nprint(message",
     "error_type": "Syntax Error",
-    "bug_location": "Line 5",
+    "bug_location": "Line 2",
     "expected_output": "System Ready",
-    "cause": "The class body is missing a closing curly brace '}'. Only the main method was closed.",
-    "correction": "Add a closing curly brace '}' for the class scope at the end.",
+    "cause": "The print function call is missing its closing parenthesis.",
+    "correction": "Close the print call with a parenthesis: print(message).",
     "points": 20,
-    "hint": "Count the open '{' and close '}' curly braces."
+    "hint": "Check whether every opening parenthesis has a closing partner.",
+    "cause_keywords": [
+      "print",
+      "call",
+      "closing",
+      "parenthesis",
+      "missing"
+    ],
+    "correction_keywords": [
+      "print",
+      "message",
+      "closing",
+      "parenthesis"
+    ]
   },
   {
     "id": "Q04",
@@ -53,77 +92,158 @@
     "cause": "The if statement is missing a trailing colon (:).",
     "correction": "Add a colon ':' at the end of line 2: 'if num > 0:'",
     "points": 20,
-    "hint": "Python control statements require a colon at the end of the line."
+    "hint": "Python control statements require a colon at the end of the line.",
+    "cause_keywords": [
+      "if",
+      "statement",
+      "missing",
+      "colon"
+    ],
+    "correction_keywords": [
+      "colon",
+      "if",
+      "num",
+      "0"
+    ]
   },
   {
     "id": "Q05",
     "language": "C",
-    "title": "Format Specifier Mismatch",
+    "title": "Missing Decimal Places",
     "difficulty": "Easy",
-    "code": "#include <stdio.h>\n\nint main() {\n    float score = 85.5;\n    printf(\"Score: %d\\n\", score);\n    return 0;\n}",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    double score = 85.5;\n    printf(\"Score: %.0f\\n\", score);\n    return 0;\n}",
     "error_type": "Logical Error",
     "bug_location": "Line 5",
-    "expected_output": "Score: 85.500000",
-    "cause": "Using '%d' integer format specifier to print a floating-point variable produces garbled output.",
-    "correction": "Use '%f' (or '%.1f') format specifier instead of '%d'.",
+    "expected_output": "Score: 85.5",
+    "cause": "The zero precision in %.0f rounds the score to zero decimal places when printing.",
+    "correction": "Change the precision to one decimal place: printf(\"Score: %.1f\\n\", score);",
     "points": 20,
-    "hint": "Look at the format specifier used in printf."
+    "hint": "The number after the dot in the format controls the decimal places.",
+    "cause_keywords": [
+      "precision",
+      "rounds",
+      "decimal",
+      "zero",
+      "printing"
+    ],
+    "correction_keywords": [
+      "precision",
+      "decimal",
+      "printf",
+      "score",
+      "1f"
+    ]
   },
   {
     "id": "Q06",
-    "language": "Java",
-    "title": "String Equality Comparison",
-    "difficulty": "Medium",
-    "code": "public class Main {\n    public static void main(String[] args) {\n        String a = new String(\"EXIT0\");\n        String b = new String(\"EXIT0\");\n        if (a == b) {\n            System.out.println(\"MATCH\");\n        } else {\n            System.out.println(\"MISMATCH\");\n        }\n    }\n}",
+    "language": "C",
+    "title": "Assignment in a Condition",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    int number = 0;\n    if (number = 0) {\n        puts(\"ZERO\");\n    } else {\n        puts(\"NOT ZERO\");\n    }\n    return 0;\n}",
     "error_type": "Logical Error",
     "bug_location": "Line 5",
-    "expected_output": "MATCH",
-    "cause": "Using '==' on Strings compares object memory references rather than string contents.",
-    "correction": "Use 'a.equals(b)' instead of 'a == b'.",
+    "expected_output": "ZERO",
+    "cause": "A single equals sign assigns zero to number; the condition therefore evaluates as false.",
+    "correction": "Compare number with zero using the equality operator: if (number == 0).",
     "points": 20,
-    "hint": "In Java, '==' checks reference equality for objects."
+    "hint": "Assignment and equality use different operators.",
+    "cause_keywords": [
+      "assigns",
+      "assignment",
+      "zero",
+      "false",
+      "condition"
+    ],
+    "correction_keywords": [
+      "number",
+      "zero",
+      "equality",
+      "compare",
+      "0"
+    ]
   },
   {
     "id": "Q07",
     "language": "Python",
-    "title": "Default Mutable Parameter Trap",
-    "difficulty": "Medium",
-    "code": "def append_item(val, container=[]):\n    container.append(val)\n    return container\n\nappend_item(10)\nprint(append_item(20))",
+    "title": "Total Reset Inside a Loop",
+    "difficulty": "Easy",
+    "code": "numbers = [2, 3, 4]\ntotal = 0\nfor number in numbers:\n    total = number\nprint(total)",
     "error_type": "Logical Error",
-    "bug_location": "Line 1",
-    "expected_output": "[20]",
-    "cause": "Default list parameter 'container=[]' is instantiated once at function definition and shared across calls.",
-    "correction": "Set default to 'container=None' and initialize 'if container is None: container = []' inside function.",
+    "bug_location": "Line 4",
+    "expected_output": "9",
+    "cause": "Assignment overwrites total on every iteration instead of accumulating the numbers.",
+    "correction": "Accumulate each number with total += number instead of total = number.",
     "points": 20,
-    "hint": "Default arguments in Python are evaluated once when the function is defined."
+    "hint": "Track the value of total after each iteration.",
+    "cause_keywords": [
+      "assignment",
+      "overwrites",
+      "total",
+      "iteration",
+      "accumulating"
+    ],
+    "correction_keywords": [
+      "accumulate",
+      "number",
+      "total"
+    ]
   },
   {
     "id": "Q08",
     "language": "C",
-    "title": "Off-by-One Array Out of Bounds",
-    "difficulty": "Medium",
-    "code": "#include <stdio.h>\n\nint main() {\n    int arr[5] = {1, 2, 3, 4, 5};\n    int sum = 0;\n    for (int i = 0; i <= 5; i++) {\n        sum += arr[i];\n    }\n    printf(\"Sum: %d\\n\", sum);\n    return 0;\n}",
-    "error_type": "Runtime Error",
+    "title": "Last Array Element Skipped",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    int arr[5] = {1, 2, 3, 4, 5};\n    int sum = 0;\n    for (int i = 0; i < 4; i++) {\n        sum += arr[i];\n    }\n    printf(\"Sum: %d\\n\", sum);\n    return 0;\n}",
+    "error_type": "Logical Error",
     "bug_location": "Line 6",
     "expected_output": "Sum: 15",
-    "cause": "Loop condition 'i <= 5' accesses arr[5], which is out of bounds for an array of size 5 (indices 0 to 4).",
-    "correction": "Change loop condition from 'i <= 5' to 'i < 5'.",
+    "cause": "The loop stops before index four, so the final array element is excluded from the sum.",
+    "correction": "Include all five array elements by changing the loop condition to i < 5.",
     "points": 20,
-    "hint": "Array indices are 0-indexed; an array of size 5 has valid indices 0 to 4."
+    "hint": "An array with five elements uses indices zero through four.",
+    "cause_keywords": [
+      "loop",
+      "index",
+      "final",
+      "element",
+      "excluded"
+    ],
+    "correction_keywords": [
+      "array",
+      "elements",
+      "loop",
+      "condition",
+      "i",
+      "5"
+    ]
   },
   {
     "id": "Q09",
-    "language": "Java",
-    "title": "Integer Division Loss of Precision",
-    "difficulty": "Medium",
-    "code": "public class Main {\n    public static void main(String[] args) {\n        int total = 100;\n        int count = 8;\n        double avg = total / count;\n        System.out.println(\"Average: \" + avg);\n    }\n}",
+    "language": "C",
+    "title": "Integer Division Before Assignment",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    int total = 25;\n    int count = 2;\n    double average = total / count;\n    printf(\"Average: %.1f\\n\", average);\n    return 0;\n}",
     "error_type": "Logical Error",
-    "bug_location": "Line 5",
+    "bug_location": "Line 6",
     "expected_output": "Average: 12.5",
-    "cause": "Both 'total' and 'count' are integers, so integer division truncates 100/8 to 12 before casting to double.",
-    "correction": "Cast one of the operands to double: 'double avg = (double) total / count;'",
+    "cause": "Both operands are integers, so division discards the fractional part before assignment to average.",
+    "correction": "Convert total to double before division: double average = (double) total / count;",
     "points": 20,
-    "hint": "Dividing two integers in Java results in integer truncation before assignment."
+    "hint": "The type on the left does not change how the expression on the right is evaluated.",
+    "cause_keywords": [
+      "operands",
+      "integers",
+      "division",
+      "fractional",
+      "discards"
+    ],
+    "correction_keywords": [
+      "double",
+      "total",
+      "division",
+      "average",
+      "count"
+    ]
   },
   {
     "id": "Q10",
@@ -137,83 +257,161 @@
     "cause": "Multiplying a string by 2 duplicates the string (\"1515\") instead of performing arithmetic.",
     "correction": "Convert the input to integer: 'int(user_val) * 2'.",
     "points": 20,
-    "hint": "String multiplication in Python repeats the text."
+    "hint": "String multiplication in Python repeats the text.",
+    "cause_keywords": [
+      "string",
+      "multiplying",
+      "duplicates",
+      "repeats",
+      "arithmetic"
+    ],
+    "correction_keywords": [
+      "int",
+      "user_val",
+      "integer",
+      "convert",
+      "2"
+    ]
   },
   {
     "id": "Q11",
     "language": "C",
-    "title": "Missing Pointer Dereference in Scanf",
-    "difficulty": "Medium",
-    "code": "#include <stdio.h>\n\nint main() {\n    int age = 0;\n    // Read age\n    scanf(\"%d\", age);\n    printf(\"Age: %d\\n\", age);\n    return 0;\n}",
-    "error_type": "Runtime Error",
+    "title": "Printing the Wrong Variable",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    int age = 20;\n    int year = 2026;\n    printf(\"Age: %d\\n\", year);\n    return 0;\n}",
+    "error_type": "Logical Error",
     "bug_location": "Line 6",
     "expected_output": "Age: 20",
-    "cause": "scanf expects the address of the variable (&age), but passing 'age' value 0 causes a segmentation fault writing to address NULL.",
-    "correction": "Pass the address of age: 'scanf(\"%d\", &age);'",
+    "cause": "The printf argument is year instead of age, so it prints the wrong variable.",
+    "correction": "Pass age to printf instead of year: printf(\"Age: %d\\n\", age);",
     "points": 20,
-    "hint": "scanf requires pointers to memory locations where input should be stored."
+    "hint": "Compare the label in the output with the variable passed to printf.",
+    "cause_keywords": [
+      "printf",
+      "argument",
+      "year",
+      "age",
+      "variable"
+    ],
+    "correction_keywords": [
+      "age",
+      "printf",
+      "year"
+    ]
   },
   {
     "id": "Q12",
-    "language": "Java",
-    "title": "ArrayIndexOutOfBoundsException",
+    "language": "Python",
+    "title": "Index Beyond the List",
     "difficulty": "Easy",
-    "code": "public class Main {\n    public static void main(String[] args) {\n        int[] nums = {10, 20, 30};\n        System.out.println(nums[3]);\n    }\n}",
+    "code": "numbers = [10, 20, 30]\nprint(numbers[3])",
     "error_type": "Runtime Error",
-    "bug_location": "Line 4",
+    "bug_location": "Line 2",
     "expected_output": "30",
-    "cause": "Accessing index 3 of an array of length 3 throws ArrayIndexOutOfBoundsException.",
-    "correction": "Access index 2 to read the last element: 'nums[2]'.",
+    "cause": "Index three is outside this three-element list; the last valid index is two, causing IndexError.",
+    "correction": "Read the last element using index two: print(numbers[2]).",
     "points": 20,
-    "hint": "The maximum valid index for an array of length 3 is 2."
+    "hint": "The first element is at index zero.",
+    "cause_keywords": [
+      "index",
+      "three",
+      "list",
+      "last",
+      "indexerror"
+    ],
+    "correction_keywords": [
+      "last",
+      "index",
+      "numbers",
+      "2",
+      "print"
+    ]
   },
   {
     "id": "Q13",
     "language": "Python",
-    "title": "Variable Shadowing in List Comprehension",
-    "difficulty": "Medium",
-    "code": "multiplier = 10\nitems = [1, 2, 3]\nresult = [item * multiplier for item in items for multiplier in [2]]\nprint(result)",
+    "title": "Adding Instead of Multiplying",
+    "difficulty": "Easy",
+    "code": "multiplier = 10\nitems = [1, 2, 3]\nresult = [item + multiplier for item in items]\nprint(result)",
     "error_type": "Logical Error",
     "bug_location": "Line 3",
     "expected_output": "[10, 20, 30]",
-    "cause": "Inner loop variable 'for multiplier in [2]' shadows the outer variable 'multiplier = 10', multiplying by 2 instead.",
-    "correction": "Remove the inner comprehension loop: '[item * multiplier for item in items]'.",
+    "cause": "The plus operator adds the multiplier to each item instead of multiplying them.",
+    "correction": "Use multiplication in the expression: item * multiplier instead of item + multiplier.",
     "points": 20,
-    "hint": "Check the variable names in the nested comprehension."
+    "hint": "Check the operator used between item and multiplier.",
+    "cause_keywords": [
+      "plus",
+      "operator",
+      "adds",
+      "multiplying",
+      "multiplier"
+    ],
+    "correction_keywords": [
+      "multiplication",
+      "item",
+      "multiplier"
+    ]
   },
   {
     "id": "Q14",
     "language": "C",
     "title": "Missing Break in Switch Statement",
     "difficulty": "Easy",
-    "code": "#include <stdio.h>\n\nvoid print_status(int code) {\n    switch(code) {\n        case 0:\n            printf(\"SUCCESS \");\n        case 1:\n            printf(\"ERROR \");\n        default:\n            printf(\"DONE\");\n    }\n}\n\nint main() {\n    print_status(0);\n    return 0;\n}",
+    "code": "#include <stdio.h>\n\nvoid print_status(int code) {\n    switch(code) {\n        case 0:\n            printf(\"SUCCESS\");\n        case 1:\n            printf(\"ERROR \");\n        default:\n            printf(\"DONE\");\n    }\n}\n\nint main(void) {\n    print_status(0);\n    return 0;\n}",
     "error_type": "Logical Error",
     "bug_location": "Line 7",
     "expected_output": "SUCCESS",
     "cause": "Missing 'break;' statement in case 0 causes fallthrough into case 1 and default.",
-    "correction": "Add 'break;' statement after 'printf(\"SUCCESS \");'.",
+    "correction": "Add break after printf(\"SUCCESS\"); to stop case 0 falling through into later cases.",
     "points": 20,
-    "hint": "Cases in C switch statements fall through unless explicitly terminated."
+    "hint": "Cases in C switch statements fall through unless explicitly terminated.",
+    "cause_keywords": [
+      "break",
+      "case",
+      "fallthrough",
+      "default"
+    ],
+    "correction_keywords": [
+      "break",
+      "printf",
+      "success",
+      "case",
+      "falling"
+    ]
   },
   {
     "id": "Q15",
-    "language": "Java",
-    "title": "NullPointerException on Uninitialized Array Element",
-    "difficulty": "Medium",
-    "code": "public class Main {\n    public static void main(String[] args) {\n        String[] names = new String[3];\n        System.out.println(names[0].toUpperCase());\n    }\n}",
-    "error_type": "Runtime Error",
-    "bug_location": "Line 4",
+    "language": "Python",
+    "title": "Method Never Called",
+    "difficulty": "Easy",
+    "code": "name = \"alice\"\nprint(name.upper)",
+    "error_type": "Logical Error",
+    "bug_location": "Line 2",
     "expected_output": "ALICE",
-    "cause": "Elements of a new String array default to null. Calling '.toUpperCase()' on null throws NullPointerException.",
-    "correction": "Initialize array elements with valid strings before calling methods: 'names[0] = \"Alice\";'.",
+    "cause": "Referencing the upper method without parentheses does not call it to convert the name.",
+    "correction": "Call the upper method using parentheses: print(name.upper()).",
     "points": 20,
-    "hint": "Objects in newly created arrays in Java default to null."
+    "hint": "A method reference and a method call are different.",
+    "cause_keywords": [
+      "upper",
+      "method",
+      "parentheses",
+      "call"
+    ],
+    "correction_keywords": [
+      "upper",
+      "method",
+      "parentheses",
+      "name",
+      "print"
+    ]
   },
   {
     "id": "Q16",
     "language": "Python",
     "title": "Dictionary Key Mutation",
-    "difficulty": "Medium",
+    "difficulty": "Easy",
     "code": "def record_score(scores, student, val):\n    scores.student = val\n    return scores\n\nscores = {}\nrecord_score(scores, \"Alice\", 95)\nprint(scores)",
     "error_type": "Runtime Error",
     "bug_location": "Line 2",
@@ -221,83 +419,162 @@
     "cause": "Attempting attribute assignment 'scores.student' on a dictionary raises AttributeError.",
     "correction": "Use dictionary key indexing: 'scores[student] = val'.",
     "points": 20,
-    "hint": "Python dictionaries use subscript square-bracket syntax for keys."
+    "hint": "Python dictionaries use subscript square-bracket syntax for keys.",
+    "cause_keywords": [
+      "attribute",
+      "dictionary",
+      "assignment",
+      "attributeerror"
+    ],
+    "correction_keywords": [
+      "dictionary",
+      "indexing",
+      "scores",
+      "student",
+      "val"
+    ]
   },
   {
     "id": "Q17",
     "language": "C",
-    "title": "Dangling Pointer Return",
-    "difficulty": "Hard",
-    "code": "#include <stdio.h>\n\nint* get_counter() {\n    int count = 42;\n    return &count;\n}\n\nint main() {\n    int *ptr = get_counter();\n    printf(\"Value: %d\\n\", *ptr);\n    return 0;\n}",
-    "error_type": "Runtime Error",
-    "bug_location": "Line 5",
-    "expected_output": "Value: 42",
-    "cause": "Returning a pointer to a local stack variable that is deallocated when get_counter returns.",
-    "correction": "Make the variable static: 'static int count = 42;' or dynamically allocate with malloc.",
+    "title": "Function Result Ignored",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint add(int a, int b) {\n    return a + b;\n}\n\nint main(void) {\n    int result = 0;\n    add(3, 4);\n    printf(\"Result: %d\\n\", result);\n    return 0;\n}",
+    "error_type": "Logical Error",
+    "bug_location": "Line 9",
+    "expected_output": "Result: 7",
+    "cause": "The returned value from add is discarded, so result remains zero.",
+    "correction": "Assign the returned value to result: result = add(3, 4);",
     "points": 20,
-    "hint": "Local variables on the stack cease to exist once the function scope exits."
+    "hint": "Calling a function does not automatically store its return value.",
+    "cause_keywords": [
+      "returned",
+      "value",
+      "discarded",
+      "result",
+      "zero"
+    ],
+    "correction_keywords": [
+      "returned",
+      "result",
+      "add",
+      "3",
+      "4"
+    ]
   },
   {
     "id": "Q18",
-    "language": "Java",
-    "title": "Infinite Recursion StackOverflowError",
-    "difficulty": "Medium",
-    "code": "public class Main {\n    public static int factorial(int n) {\n        return n * factorial(n - 1);\n    }\n\n    public static void main(String[] args) {\n        System.out.println(factorial(4));\n    }\n}",
-    "error_type": "Runtime Error",
-    "bug_location": "Line 2",
-    "expected_output": "24",
-    "cause": "Missing base case (e.g. if n <= 1 return 1) causes endless recursive calls until StackOverflowError.",
-    "correction": "Add base case: 'if (n <= 1) return 1;' at the start of factorial.",
+    "language": "Python",
+    "title": "Return Too Early",
+    "difficulty": "Easy",
+    "code": "def total(numbers):\n    answer = 0\n    for number in numbers:\n        answer += number\n        return answer\n\nprint(total([1, 2, 3]))",
+    "error_type": "Logical Error",
+    "bug_location": "Line 5",
+    "expected_output": "6",
+    "cause": "The return statement is inside the loop, so the function exits after the first element.",
+    "correction": "Unindent return answer so it runs after the loop finishes.",
     "points": 20,
-    "hint": "Every recursive function must have a terminating base condition."
+    "hint": "Look at the indentation of the return statement.",
+    "cause_keywords": [
+      "return",
+      "loop",
+      "exits",
+      "first",
+      "element"
+    ],
+    "correction_keywords": [
+      "unindent",
+      "return",
+      "answer",
+      "loop"
+    ]
   },
   {
     "id": "Q19",
     "language": "Python",
-    "title": "Generator Exhaustion Trap",
-    "difficulty": "Hard",
-    "code": "def get_nums():\n    yield from [1, 2, 3]\n\ngen = get_nums()\nsum_first = sum(gen)\ncount = len(list(gen))\nprint(sum_first, count)",
+    "title": "Missing Return Value",
+    "difficulty": "Easy",
+    "code": "def square(number):\n    number * number\n\nprint(square(4))",
     "error_type": "Logical Error",
-    "bug_location": "Line 6",
-    "expected_output": "6 3",
-    "cause": "Generators in Python can only be consumed once. 'sum(gen)' exhausts it, leaving 'list(gen)' empty with length 0.",
-    "correction": "Materialize the generator into a list first: 'items = list(get_nums())', then compute sum and length from items.",
+    "bug_location": "Line 2",
+    "expected_output": "16",
+    "cause": "The function calculates an expression but has no return statement, so it returns None.",
+    "correction": "Return the calculated value: return number * number.",
     "points": 20,
-    "hint": "A generator is an iterator that cannot be re-iterated once exhausted."
+    "hint": "How does a function pass its result back to the caller?",
+    "cause_keywords": [
+      "function",
+      "expression",
+      "return",
+      "none"
+    ],
+    "correction_keywords": [
+      "return",
+      "number",
+      "value"
+    ]
   },
   {
     "id": "Q20",
     "language": "C",
-    "title": "String Literal Buffer Overwrite",
-    "difficulty": "Hard",
-    "code": "#include <stdio.h>\n#include <string.h>\n\nint main() {\n    char *str = \"Hello\";\n    str[0] = 'h';\n    printf(\"%s\\n\", str);\n    return 0;\n}",
-    "error_type": "Runtime Error",
-    "bug_location": "Line 6",
-    "expected_output": "hello",
-    "cause": "String literal \"Hello\" is allocated in read-only text segment. Writing to it causes a segmentation fault.",
-    "correction": "Declare str as a mutable char array: 'char str[] = \"Hello\";'.",
+    "title": "Changing the Wrong Character",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    char word[] = \"hello\";\n    word[1] = 'H';\n    puts(word);\n    return 0;\n}",
+    "error_type": "Logical Error",
+    "bug_location": "Line 5",
+    "expected_output": "Hello",
+    "cause": "Index one selects the second character; the first character is at index zero.",
+    "correction": "Change the first character with index zero: word[0] = 'H';",
     "points": 20,
-    "hint": "Pointers to string literals in C point to read-only memory."
+    "hint": "String indices start at zero in C.",
+    "cause_keywords": [
+      "index",
+      "second",
+      "first",
+      "zero",
+      "character"
+    ],
+    "correction_keywords": [
+      "first",
+      "character",
+      "zero",
+      "word",
+      "0",
+      "h"
+    ]
   },
   {
     "id": "Q21",
-    "language": "Java",
-    "title": "Static vs Instance Field Collision",
-    "difficulty": "Medium",
-    "code": "public class Counter {\n    public static int count = 0;\n    public void increment() {\n        count++;\n    }\n    public static void main(String[] args) {\n        Counter c1 = new Counter();\n        Counter c2 = new Counter();\n        c1.increment();\n        c2.increment();\n        System.out.println(\"c1 count: \" + c1.count);\n    }\n}",
+    "language": "C",
+    "title": "Pass Mark Excluded",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    int score = 50;\n    if (score > 50) {\n        puts(\"PASS\");\n    } else {\n        puts(\"FAIL\");\n    }\n    return 0;\n}",
     "error_type": "Logical Error",
-    "bug_location": "Line 2",
-    "expected_output": "c1 count: 1",
-    "cause": "'count' is declared static, so it is shared across all Counter instances instead of being instance-specific.",
-    "correction": "Remove 'static' keyword from 'count' declaration: 'public int count = 0;'.",
+    "bug_location": "Line 5",
+    "expected_output": "PASS",
+    "cause": "The strict greater-than condition excludes a score equal to the pass mark of fifty.",
+    "correction": "Include the boundary by comparing score >= 50.",
     "points": 20,
-    "hint": "Static members belong to the class rather than individual instances."
+    "hint": "A score exactly equal to the pass mark should pass.",
+    "cause_keywords": [
+      "condition",
+      "excludes",
+      "equal",
+      "score",
+      "fifty"
+    ],
+    "correction_keywords": [
+      "boundary",
+      "score",
+      "50",
+      "comparing"
+    ]
   },
   {
     "id": "Q22",
     "language": "Python",
     "title": "Exception Swallowing Without Reraise",
-    "difficulty": "Medium",
+    "difficulty": "Easy",
     "code": "def parse_int(text):\n    try:\n        return int(text)\n    except ValueError:\n        pass\n\nval = parse_int(\"abc\")\nprint(val + 5)",
     "error_type": "Runtime Error",
     "bug_location": "Line 8",
@@ -305,118 +582,242 @@
     "cause": "'pass' in the except block causes parse_int to implicitly return None, and 'None + 5' raises TypeError.",
     "correction": "Return a default value (e.g. 0) in the except block: 'return 0'.",
     "points": 20,
-    "hint": "A function that falls off the end without return produces None."
+    "hint": "A function that falls off the end without return produces None.",
+    "cause_keywords": [
+      "pass",
+      "return",
+      "none",
+      "typeerror"
+    ],
+    "correction_keywords": [
+      "return",
+      "default",
+      "0",
+      "except"
+    ]
   },
   {
     "id": "Q23",
     "language": "C",
-    "title": "Strcpy Destination Buffer Overflow",
-    "difficulty": "Hard",
-    "code": "#include <stdio.h>\n#include <string.h>\n\nint main() {\n    char small[4];\n    strcpy(small, \"IEEE_EXIT_CODE_0\");\n    printf(\"%s\\n\", small);\n    return 0;\n}",
-    "error_type": "Runtime Error",
-    "bug_location": "Line 6",
+    "title": "Truncated Word",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    char word[] = \"IEEE\";\n    printf(\"%.3s\\n\", word);\n    return 0;\n}",
+    "error_type": "Logical Error",
+    "bug_location": "Line 5",
     "expected_output": "IEEE",
-    "cause": "Destination array 'small' only has capacity for 4 bytes, copying 17 bytes corrupts adjacent memory.",
-    "correction": "Increase buffer size: 'char small[32];' or use strncpy: 'strncpy(small, \"IEEE\", 4); small[3] = '\\0';'.",
+    "cause": "The precision of three in %.3s limits printing to three characters of the string.",
+    "correction": "Print the whole string with %s instead of %.3s: printf(\"%s\\n\", word);",
     "points": 20,
-    "hint": "The destination buffer must be large enough to hold the source string plus null terminator."
+    "hint": "A precision on %s limits the number of characters printed.",
+    "cause_keywords": [
+      "precision",
+      "three",
+      "characters",
+      "string",
+      "limits"
+    ],
+    "correction_keywords": [
+      "string",
+      "printf",
+      "word",
+      "s"
+    ]
   },
   {
     "id": "Q24",
-    "language": "Java",
-    "title": "ConcurrentModificationException",
-    "difficulty": "Hard",
-    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> list = new ArrayList<>(Arrays.asList(\"A\", \"B\", \"C\"));\n        for (String item : list) {\n            if (item.equals(\"B\")) {\n                list.remove(item);\n            }\n        }\n        System.out.println(list.size());\n    }\n}",
-    "error_type": "Runtime Error",
-    "bug_location": "Line 8",
-    "expected_output": "2",
-    "cause": "Modifying a collection directly while iterating over it with an enhanced for-loop throws ConcurrentModificationException.",
-    "correction": "Use an explicit Iterator: 'Iterator<String> it = list.iterator(); ... it.remove();' or 'list.removeIf(item -> item.equals(\"B\"));'.",
+    "language": "Python",
+    "title": "Slice Starts Too Late",
+    "difficulty": "Easy",
+    "code": "word = \"CODE\"\nprint(word[1:3])",
+    "error_type": "Logical Error",
+    "bug_location": "Line 2",
+    "expected_output": "COD",
+    "cause": "The slice starts at index one and skips the first character; the stop index three is exclusive.",
+    "correction": "Start the slice at zero: print(word[0:3]) or print(word[:3]).",
     "points": 20,
-    "hint": "Do not structurally modify collections during enhanced for-loop iterations."
+    "hint": "The slice includes its start index but excludes its stop index.",
+    "cause_keywords": [
+      "slice",
+      "index",
+      "skips",
+      "first",
+      "exclusive"
+    ],
+    "correction_keywords": [
+      "slice",
+      "zero",
+      "word",
+      "print",
+      "3"
+    ]
   },
   {
     "id": "Q25",
     "language": "Python",
-    "title": "Shallow Copy Mutation Hazard",
-    "difficulty": "Hard",
-    "code": "def duplicate_matrix(matrix):\n    return matrix.copy()\n\nm1 = [[1, 2], [3, 4]]\nm2 = duplicate_matrix(m1)\nm2[0][0] = 99\nprint(m1[0][0])",
+    "title": "Two Names for One List",
+    "difficulty": "Medium",
+    "code": "original = [1, 2, 3]\nbackup = original\nbackup[0] = 99\nprint(original[0])",
     "error_type": "Logical Error",
     "bug_location": "Line 2",
     "expected_output": "1",
-    "cause": "Shallow copy copies outer list references, so nested lists remain shared between m1 and m2.",
-    "correction": "Use 'copy.deepcopy(matrix)' instead of shallow copy.",
+    "cause": "Assignment makes backup and original refer to the same list, so mutation changes both views.",
+    "correction": "Create a separate copy of the list: backup = original.copy().",
     "points": 20,
-    "hint": "Shallow copy only duplicates the outer container, not nested mutable objects."
+    "hint": "Does assigning a list create a new list?",
+    "cause_keywords": [
+      "assignment",
+      "backup",
+      "original",
+      "same",
+      "list",
+      "mutation"
+    ],
+    "correction_keywords": [
+      "copy",
+      "list",
+      "backup",
+      "original"
+    ]
   },
   {
     "id": "Q26",
     "language": "C",
-    "title": "Integer Overflow with Signed Types",
-    "difficulty": "Hard",
-    "code": "#include <stdio.h>\n#include <limits.h>\n\nint main() {\n    int max_val = INT_MAX;\n    int next = max_val + 1;\n    printf(\"%d > 0: %s\\n\", next, next > 0 ? \"YES\" : \"NO\");\n    return 0;\n}",
+    "title": "Wrong Order of Operations",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    int result = 2 + 3 * 4;\n    printf(\"%d\\n\", result);\n    return 0;\n}",
     "error_type": "Logical Error",
-    "bug_location": "Line 6",
-    "expected_output": "2147483648 > 0: YES",
-    "cause": "Adding 1 to INT_MAX causes 32-bit signed integer overflow into negative numbers (INT_MIN).",
-    "correction": "Use 64-bit integer type: 'long long next = (long long)max_val + 1;'.",
+    "bug_location": "Line 4",
+    "expected_output": "20",
+    "cause": "Multiplication has higher precedence than addition, so three times four is evaluated first.",
+    "correction": "Group the addition using parentheses: int result = (2 + 3) * 4;",
     "points": 20,
-    "hint": "INT_MAX is the upper bound for signed 32-bit integers."
+    "hint": "Which arithmetic operator is evaluated first?",
+    "cause_keywords": [
+      "multiplication",
+      "precedence",
+      "addition",
+      "first"
+    ],
+    "correction_keywords": [
+      "addition",
+      "parentheses",
+      "result",
+      "2",
+      "3",
+      "4"
+    ]
   },
   {
     "id": "Q27",
-    "language": "Java",
-    "title": "Floating Point Comparison Precision",
-    "difficulty": "Medium",
-    "code": "public class Main {\n    public static void main(String[] args) {\n        double val = 0.1 + 0.2;\n        if (val == 0.3) {\n            System.out.println(\"EQUAL\");\n        } else {\n            System.out.println(\"NOT EQUAL\");\n        }\n    }\n}",
+    "language": "C",
+    "title": "Even Test Reversed",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    int number = 8;\n    if (number % 2 == 1) {\n        puts(\"EVEN\");\n    } else {\n        puts(\"ODD\");\n    }\n    return 0;\n}",
     "error_type": "Logical Error",
-    "bug_location": "Line 4",
-    "expected_output": "EQUAL",
-    "cause": "Binary floating-point representation causes 0.1 + 0.2 to evaluate to 0.30000000000000004.",
-    "correction": "Compare with an epsilon tolerance: 'Math.abs(val - 0.3) < 1e-9'.",
+    "bug_location": "Line 5",
+    "expected_output": "EVEN",
+    "cause": "The condition tests for remainder one, which identifies odd positive numbers instead of even numbers.",
+    "correction": "Test whether the remainder is zero: number % 2 == 0.",
     "points": 20,
-    "hint": "Never compare floating-point arithmetic results using exact equality '=='."
+    "hint": "An even number divides by two without a remainder.",
+    "cause_keywords": [
+      "condition",
+      "remainder",
+      "odd",
+      "even",
+      "one"
+    ],
+    "correction_keywords": [
+      "remainder",
+      "zero",
+      "number",
+      "2",
+      "0"
+    ]
   },
   {
     "id": "Q28",
     "language": "Python",
-    "title": "Late Binding Closures in Loops",
-    "difficulty": "Hard",
-    "code": "funcs = []\nfor i in range(3):\n    funcs.append(lambda: i)\n\nresults = [f() for f in funcs]\nprint(results)",
+    "title": "Adding Text Instead of Numbers",
+    "difficulty": "Easy",
+    "code": "first = \"2\"\nsecond = \"3\"\nprint(first + second)",
     "error_type": "Logical Error",
     "bug_location": "Line 3",
-    "expected_output": "[0, 1, 2]",
-    "cause": "Python closures bind variables late, so all lambdas look up 'i' at call time when it has value 2.",
-    "correction": "Bind the loop variable immediately as a default argument: 'lambda i=i: i'.",
+    "expected_output": "5",
+    "cause": "Both values are strings, so the plus operator concatenates text instead of adding numbers.",
+    "correction": "Convert both strings to integers before adding: print(int(first) + int(second)).",
     "points": 20,
-    "hint": "Lambdas inside loops look up variables dynamically when called."
+    "hint": "Look at the types of first and second.",
+    "cause_keywords": [
+      "strings",
+      "operator",
+      "concatenates",
+      "text",
+      "numbers"
+    ],
+    "correction_keywords": [
+      "strings",
+      "integers",
+      "int",
+      "first",
+      "second"
+    ]
   },
   {
     "id": "Q29",
     "language": "C",
-    "title": "Memory Leak in Dynamic Allocation Loop",
-    "difficulty": "Hard",
-    "code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main() {\n    int *ptr = NULL;\n    for (int i = 0; i < 3; i++) {\n        ptr = (int *)malloc(sizeof(int) * 10);\n        ptr[0] = i * 10;\n    }\n    printf(\"Final value: %d\\n\", ptr[0]);\n    free(ptr);\n    return 0;\n}",
+    "title": "Empty Loop Body",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    for (int i = 0; i < 3; i++);\n    {\n        puts(\"GO\");\n    }\n    return 0;\n}",
     "error_type": "Logical Error",
-    "bug_location": "Line 7",
-    "expected_output": "Final value: 20",
-    "cause": "In each iteration, ptr is reassigned without freeing previously allocated blocks, leaking 2 memory buffers.",
-    "correction": "Free previous allocation before reassigning or allocate once outside the loop.",
+    "bug_location": "Line 4",
+    "expected_output": "GO\nGO\nGO",
+    "cause": "The semicolon creates an empty loop body; the following block executes only once after the loop.",
+    "correction": "Remove the semicolon after the for header so the block becomes the loop body.",
     "points": 20,
-    "hint": "Every call to malloc should have a corresponding free call."
+    "hint": "Check the character immediately after the closing parenthesis of for.",
+    "cause_keywords": [
+      "semicolon",
+      "empty",
+      "loop",
+      "body",
+      "once"
+    ],
+    "correction_keywords": [
+      "semicolon",
+      "for",
+      "header",
+      "block",
+      "loop"
+    ]
   },
   {
     "id": "Q30",
-    "language": "Java",
-    "title": "Autoboxing Null Pointer Dereference",
-    "difficulty": "Hard",
-    "code": "public class Main {\n    public static void main(String[] args) {\n        Integer box = null;\n        int primitive = box;\n        System.out.println(\"Value: \" + primitive);\n    }\n}",
-    "error_type": "Runtime Error",
-    "bug_location": "Line 4",
-    "expected_output": "Value: 0",
-    "cause": "Autounboxing a null Integer wrapper to primitive int invokes '.intValue()' on null, throwing NullPointerException.",
-    "correction": "Check for null before unboxing or initialize box with a default integer: 'Integer box = 0;'.",
+    "language": "C",
+    "title": "Range Check Always True",
+    "difficulty": "Easy",
+    "code": "#include <stdio.h>\n\nint main(void) {\n    int number = 15;\n    if (number >= 1 || number <= 10) {\n        puts(\"INSIDE\");\n    } else {\n        puts(\"OUTSIDE\");\n    }\n    return 0;\n}",
+    "error_type": "Logical Error",
+    "bug_location": "Line 5",
+    "expected_output": "OUTSIDE",
+    "cause": "Logical OR accepts either comparison, so number fifteen passes the lower bound even though it exceeds ten.",
+    "correction": "Require both bounds with logical AND: number >= 1 && number <= 10.",
     "points": 20,
-    "hint": "Unboxing a null wrapper object causes NullPointerException."
+    "hint": "To be in a range, must one condition hold or must both hold?",
+    "cause_keywords": [
+      "logical",
+      "or",
+      "comparison",
+      "bound",
+      "exceeds"
+    ],
+    "correction_keywords": [
+      "bounds",
+      "logical",
+      "and",
+      "number",
+      "1",
+      "10"
+    ]
   }
 ]

@@ -2,8 +2,8 @@ import re
 import json
 from datetime import datetime, timezone
 from rapidfuzz import fuzz
+from answer_feedback import answer_field_results
 from database import get_db_connection, unlock_next_question, record_activity
-from config import Config
 
 def normalize_text(text):
     if not text:
@@ -20,106 +20,139 @@ def extract_line_numbers(text):
     matches = re.findall(r'(?:line\s*|l)?(\d+)', str(text).lower())
     return [int(m) for m in matches if m.isdigit()]
 
-def evaluate_submission(question, user_submission, is_double_commit=False, hint_used=False):
-    """
-    Evaluates participant submission against reference question data.
-    Weights per Section 19:
-      - Error Identification: 25% (Error Type 15%, Bug Location 10%)
-      - Cause Explanation:    25%
-      - Expected Output:      20%
-      - Correction:           30%
-    """
-    base_points = float(question.get("points", question.get("base_points", 20)))
+# Existing Rubber Duck rule is retained; replacements have the same base-point cost.
+HINT_PENALTY_RATE = 0.10
+SWAP_PENALTY_RATE = 0.10
+_KEYWORD_STOPWORDS = frozenset("a an the and or is are was were be been being to of for in on at by with from as it its this that these those due before after instead use using add change line end".split())
 
-    # 1. Error Type (15% of base)
+
+def _keyword_tokens(text):
+    return set(re.findall(r"[a-z_][a-z_0-9]*|[0-9]+", str(text).casefold()))
+
+
+def _keyword_count(question, field, response):
+    """Count distinct reference concepts, never repeated words or substrings.
+
+    Curated keyword arrays live only on the server. A nested array may describe
+    synonyms for one concept. Old organizer-created questions without keywords
+    fall back to the meaningful tokens in their reference answer.
+    """
+    groups = question.get(f"{field}_keywords")
+    if isinstance(groups, str):
+        try:
+            groups = json.loads(groups)
+        except (TypeError, ValueError):
+            groups = None
+    if not isinstance(groups, list) or not groups:
+        groups = sorted(_keyword_tokens(question.get(field, "")) - _KEYWORD_STOPWORDS)
+    response_tokens = " " + " ".join(re.findall(r"[a-z_][a-z_0-9]*|[0-9]+", str(response).casefold())) + " "
+    matched = set()
+    for group in groups:
+        alternatives = group if isinstance(group, list) else [group]
+        normalized = set()
+        for alternative in alternatives:
+            if not isinstance(alternative, str):
+                continue
+            phrase = " ".join(re.findall(r"[a-z_][a-z_0-9]*|[0-9]+", alternative.casefold()))
+            if phrase and phrase not in _KEYWORD_STOPWORDS:
+                normalized.add(phrase)
+        # Duplicate keyword entries cannot artificially meet the two-keyword rule.
+        concept = tuple(sorted(normalized))
+        if concept and any(f" {phrase} " in response_tokens for phrase in normalized):
+            matched.add(concept)
+    return len(matched)
+
+
+def evaluate_submission(question, user_submission, is_double_commit=False, hint_used=False, swap_used=False):
+    """Score once: 25% identification, 25% cause, 20% output, 30% correction.
+
+    Cause and correction each need at least two distinct reference keywords.
+    Double Commit applies to the raw score first; hint and swap then each deduct
+    10% of the question's base points, with the final score floored at zero.
+    """
+    base_points = max(0.0, float(question.get("points", question.get("base_points", 20))))
+
     ref_error_type = normalize_text(question.get("error_type", ""))
     user_error_type = normalize_text(user_submission.get("error_type", ""))
-    type_score = 0.0
-    if user_error_type:
-        if user_error_type == ref_error_type or user_error_type in ref_error_type or ref_error_type in user_error_type:
-            type_score = 0.15 * base_points
-        elif fuzz.ratio(user_error_type, ref_error_type) >= 70:
-            type_score = 0.15 * base_points
+    # A bare "error" must not match every category.
+    ref_type = re.sub(r"\b(?:error|exception)\b", "", ref_error_type).strip()
+    user_type = re.sub(r"\b(?:error|exception)\b", "", user_error_type).strip()
+    type_score = 0.15 * base_points if ref_type and user_type and (
+        user_type == ref_type or fuzz.ratio(user_type, ref_type) >= 85
+    ) else 0.0
 
-    # 2. Bug Location (10% of base)
-    ref_loc_lines = extract_line_numbers(question.get("bug_location", ""))
-    user_loc_lines = extract_line_numbers(user_submission.get("error_location", ""))
+    ref_loc_lines = set(extract_line_numbers(question.get("bug_location", "")))
+    user_loc_lines = set(extract_line_numbers(user_submission.get("error_location", "")))
     loc_score = 0.0
-    if ref_loc_lines and user_loc_lines and any(line in ref_loc_lines for line in user_loc_lines):
-        loc_score = 0.10 * base_points
+    if ref_loc_lines:
+        # Listing every line is not a valid location identification.
+        if user_loc_lines and user_loc_lines.issubset(ref_loc_lines):
+            loc_score = 0.10 * base_points
     else:
-        norm_ref_loc = normalize_text(question.get("bug_location", ""))
-        norm_user_loc = normalize_text(user_submission.get("error_location", ""))
-        if norm_user_loc and (norm_user_loc in norm_ref_loc or norm_ref_loc in norm_user_loc):
-            loc_score = 0.10 * base_points
-        elif fuzz.partial_ratio(norm_user_loc, norm_ref_loc) >= 75:
+        ref_loc = normalize_text(question.get("bug_location", ""))
+        user_loc = normalize_text(user_submission.get("error_location", ""))
+        if ref_loc and user_loc == ref_loc:
             loc_score = 0.10 * base_points
 
-    error_id_score = type_score + loc_score
-
-    # 3. Cause Explanation (25% of base)
-    ref_cause = normalize_text(question.get("cause", ""))
     user_cause = normalize_text(user_submission.get("cause", ""))
+    cause_keywords = _keyword_count(question, "cause", user_submission.get("cause", ""))
     cause_score = 0.0
-    if user_cause:
-        ratio = fuzz.token_set_ratio(user_cause, ref_cause)
+    if user_cause and cause_keywords >= 2:
+        ratio = fuzz.token_set_ratio(user_cause, normalize_text(question.get("cause", "")))
         if ratio >= 65:
             cause_score = 0.25 * base_points
         elif ratio >= 45:
             cause_score = 0.15 * base_points
 
-    # 4. Expected Output (20% of base)
-    ref_output = normalize_text(question.get("expected_output", ""))
-    user_output = normalize_text(user_submission.get("expected_output", ""))
-    output_score = 0.0
-    if user_output:
-        if user_output == ref_output or user_output in ref_output or ref_output in user_output:
-            output_score = 0.20 * base_points
-        else:
-            out_ratio = fuzz.token_sort_ratio(user_output, ref_output)
-            if out_ratio >= 70:
-                output_score = 0.20 * base_points
-            elif out_ratio >= 50:
-                output_score = 0.10 * base_points
+    # Output is a short, concrete value: substring/fuzzy matching awarded points
+    # for "1" against "10", and punctuation stripping lost negative signs.
+    ref_output = " ".join(str(question.get("expected_output", "")).casefold().split())
+    user_output = " ".join(str(user_submission.get("expected_output", "")).casefold().split())
+    output_score = 0.20 * base_points if ref_output and user_output == ref_output else 0.0
 
-    # 5. Correction (30% of base)
-    ref_corr = normalize_text(question.get("correction", ""))
     user_corr = normalize_text(user_submission.get("correction", ""))
+    correction_keywords = _keyword_count(question, "correction", user_submission.get("correction", ""))
     corr_score = 0.0
-    if user_corr:
-        corr_ratio = fuzz.token_set_ratio(user_corr, ref_corr)
-        if corr_ratio >= 65:
+    if user_corr and correction_keywords >= 2:
+        ratio = fuzz.token_set_ratio(user_corr, normalize_text(question.get("correction", "")))
+        if ratio >= 65:
             corr_score = 0.30 * base_points
-        elif corr_ratio >= 45:
+        elif ratio >= 45:
             corr_score = 0.15 * base_points
 
-    raw_total = error_id_score + cause_score + output_score + corr_score
-    final_total = raw_total
-
-    # Tactical Modifiers
+    raw_total = round(type_score + loc_score + cause_score + output_score + corr_score, 2)
+    modified_total = raw_total
     if is_double_commit:
-        if raw_total >= (0.60 * base_points):
-            final_total = raw_total * 2.0
-        else:
-            final_total = 0.0
+        modified_total = raw_total * 2.0 if raw_total >= 0.60 * base_points else 0.0
+    hint_penalty = round(base_points * HINT_PENALTY_RATE, 2) if hint_used else 0.0
+    swap_penalty = round(base_points * SWAP_PENALTY_RATE, 2) if swap_used else 0.0
+    penalty_total = hint_penalty + swap_penalty
+    final_total = max(0.0, modified_total - penalty_total)
+    max_score = max(0.0, base_points * (2 if is_double_commit else 1) - penalty_total)
+    answer_status = "correct" if base_points > 0 and raw_total >= base_points else "partial" if raw_total > 0 else "incorrect"
 
-    if hint_used and final_total > 0:
-        penalty = 0.10 * base_points
-        final_total = max(0.0, final_total - penalty)
-
-    return {
+    result = {
         "error_type_score": round(type_score, 2),
         "error_loc_score": round(loc_score, 2),
         "cause_score": round(cause_score, 2),
         "output_score": round(output_score, 2),
         "correction_score": round(corr_score, 2),
-        "raw_total": round(raw_total, 2),
+        "raw_total": raw_total,
+        "raw_score": raw_total,
         "total_score": round(final_total, 2),
         "base_points": base_points,
-        "is_double_commit": 1 if is_double_commit else 0,
-        "hint_used": 1 if hint_used else 0,
+        "max_score": round(max_score, 2),
+        "answer_status": answer_status,
+        "is_double_commit": int(bool(is_double_commit)),
+        "hint_used": int(bool(hint_used)),
+        "swap_used": int(bool(swap_used)),
+        "penalties": {"hint": hint_penalty, "swap": swap_penalty, "total": round(penalty_total, 2),
+                      "applied": round(min(modified_total, penalty_total), 2)},
+        "keyword_matches": {"cause": cause_keywords, "correction": correction_keywords, "required": 2},
         "percentage": round((raw_total / base_points) * 100, 1) if base_points > 0 else 0
     }
+    result["field_results"] = answer_field_results(result, base_points)
+    return result
 
 def _live_error(cur):
     state = cur.execute("SELECT event_status, is_paused, event_end_time FROM event_state WHERE id = 1").fetchone()
@@ -137,7 +170,9 @@ def _live_error(cur):
 def _assignment_allowed(cur, team_id, question_id):
     return cur.execute("""SELECT 1 FROM question_assignments qa JOIN teams t ON t.id = qa.team_id
         WHERE qa.team_id = ? AND qa.question_id = ? AND qa.is_unlocked = 1
-        AND qa.is_abandoned = 0 AND t.is_active = 1""", (team_id, question_id)).fetchone() is not None
+        AND qa.is_abandoned = 0 AND qa.is_completed = 0 AND t.is_active = 1
+        AND NOT EXISTS (SELECT 1 FROM submissions s WHERE s.team_id = qa.team_id AND s.question_id = qa.question_id)
+        """, (team_id, question_id)).fetchone() is not None
 
 
 def process_submission(team_id, question_id, submission_data, enforce_live=False):
@@ -159,6 +194,9 @@ def process_submission(team_id, question_id, submission_data, enforce_live=False
                 if existing["question_id"] != question_id:
                     return None, "This request has already been used for another question."
                 return json.loads(existing["response_json"]), None
+        # BEGIN IMMEDIATE serializes competing answers, even with different request IDs.
+        if cur.execute("SELECT 1 FROM submissions WHERE team_id = ? AND question_id = ?", (team_id, question_id)).fetchone():
+            return None, "This question has already been answered. Your first submission is final."
         if not _assignment_allowed(cur, team_id, question_id):
             return None, "This question is not unlocked for your team."
         # Check if question exists
@@ -184,20 +222,24 @@ def process_submission(team_id, question_id, submission_data, enforce_live=False
         double_armed = cur.fetchone()
         is_double = bool(double_armed)
 
-        # Check if Rubber Duck was used
-        cur.execute("""
-            SELECT * FROM powerups
-            WHERE team_id = ? AND powerup_type = 'RUBBER_DUCK' AND is_used = 1 AND target_question_id = ?
-        """, (team_id, question_id))
-        duck_used = cur.fetchone()
-        is_hint = bool(duck_used)
+        # Replacement retains the original slot's hint cost as well as its swap cost.
+        # This uses the recorded abandoned assignment, including the locked-question
+        # fallback, so refreshes and retries cannot lose either modifier.
+        swapped = cur.execute("""
+            SELECT old.question_id FROM question_assignments old
+            JOIN powerups p ON p.team_id = old.team_id AND p.target_question_id = old.question_id
+            WHERE old.team_id = ? AND old.question_order = ? AND old.is_abandoned = 1
+              AND p.powerup_type = 'GIT_REVERT' AND p.is_used = 1
+        """, (team_id, assignment["question_order"])).fetchone()
+        source_qid = swapped["question_id"] if swapped else question_id
+        is_hint = cur.execute("""
+            SELECT 1 FROM powerups WHERE team_id = ? AND powerup_type = 'RUBBER_DUCK'
+              AND is_used = 1 AND target_question_id IN (?, ?)
+        """, (team_id, question_id, source_qid)).fetchone() is not None
 
-        # Evaluate score
         eval_result = evaluate_submission(
-            dict(question),
-            submission_data,
-            is_double_commit=is_double,
-            hint_used=is_hint
+            dict(question), submission_data, is_double_commit=is_double,
+            hint_used=is_hint, swap_used=bool(swapped)
         )
 
         # Record submission in SQLite
@@ -402,7 +444,7 @@ def activate_git_revert(team_id, question_id, enforce_live=False):
         """, (question_id, team_id))
 
         conn.commit()
-        return True, "Git Revert successful! Challenge replaced.", new_qid
+        return True, "Git Revert successful! Replacement carries a 10% base-point deduction; any hint deduction also carries over.", new_qid
     except Exception as e:
         conn.rollback()
         return False, "Power-up could not be saved. Please try again.", None

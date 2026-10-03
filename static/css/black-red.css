@@ -7,6 +7,20 @@
   --radius-sm:4px; --radius-md:8px; --radius-lg:10px;
 }
 body,.landing-page,.admin-page { background:#080808; }
+/* A fixed field covers the whole document while keeping canvas work viewport-sized. */
+body { isolation:isolate; }
+.site-dot-grid {
+  position:fixed; inset:0; z-index:-1; pointer-events:none; overflow:hidden;
+  background-image:radial-gradient(circle,#54232d 1.3px,transparent 1.5px);
+  background-size:27px 27px; background-position:center; opacity:.86;
+}
+.site-dot-grid:has(canvas[data-dot-count]) { background-image:none; }
+/* Superseded local fields stay empty on older page templates. */
+.hero-dot-field,.auth-dot-field { display:none; }
+@media(prefers-reduced-motion:reduce) {
+  .site-dot-grid:has(canvas[data-dot-count]) { background-image:radial-gradient(circle,#54232d 1.3px,transparent 1.5px); }
+  .site-dot-grid .dot-grid { visibility:hidden; }
+}
 ::selection { background:#d5233d70; color:#fff; }
 .navbar { height:68px; background:#080808f5; border-bottom:1px solid #422027; }
 .nav-brand .brand-symbol,.arena-brand .brand-symbol { color:#ff4a57; border-color:#a32e3a; background:#230a10; border-radius:5px; }

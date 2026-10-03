@@ -48,7 +48,10 @@
       setConnection(true);
       if (!res.ok || data.success === false) {
         const error = new Error(res.status >= 500 ? 'The server could not complete this request. Please try again.' : data.error || 'This request could not be completed.');
-        error.status = res.status; error.data = data; throw error;
+        error.status = res.status; error.data = data;
+        if (data.blocked) document.dispatchEvent(new CustomEvent('participant:blocked', {detail: data}));
+        if (data.fullscreen_required) document.dispatchEvent(new CustomEvent('participant:fullscreen-required'));
+        throw error;
       }
       return data;
     } catch (err) {
@@ -88,7 +91,7 @@
       const observer = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target); } }), { threshold: 0.06 });
       document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     }
-    document.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('click', event => { if (event.target === dialog && dialog.id !== 'competition-dialog') { const bounds = dialog.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close(); } }));
+    document.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('click', event => { if (event.target === dialog && !['competition-dialog', 'participant-gate'].includes(dialog.id)) { const bounds = dialog.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close(); } }));
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

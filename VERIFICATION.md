@@ -68,3 +68,24 @@ The current preview remains at http://127.0.0.1:5050/?ui=black-red. No commit, p
 At the user's request, the formerly excluded homepage demo now matches the black/red theme. Its source program, existing markup and dimensions remain unchanged. React/Motion adds a moving line scan, fault emphasis, animated correction, test-progress bar and console transitions; the demo's BorderGlow and PatternWaves now use red.
 
 The demo timer and animation controls pause together, suspend offscreen/when the tab is hidden, and use a static final state for reduced motion. The main title and event-information strip were compared against pre-update captures and remained pixel-identical. No other page, backend, registration flow or competition behavior was changed. Local checks are in `scripts/demo_motion_smoke.cjs`.
+
+
+## Participant rule update · 2 October 2026
+
+- Isolated browser flow: signed-in lobby → debugging → results → quiz → feedback → blocked-account login. Fullscreen entry and actual browser exits exercised; first warning gates access, second blocks the account persistently.
+- Debugging first answer is final; hint/swap penalties and a two-keyword minimum have regression coverage, including concurrent submissions and idempotent retries.
+- Quiz review and six 1–5 ratings plus note survive refresh. Organizer feedback panel verified. No browser JavaScript errors.
+- All repaired C/Python programs were executed against their expected output. Every reference descriptive answer meets the keyword minimum.
+- Versioned bank migration preserves teams, assignments, submission scores and active flags; a subsequent startup preserves organizer edits.
+- Run Python verification with `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk venv/bin/python -m pytest -q` on this Mac (its default newer SDK linker is incompatible).
+- Browser regression: `EXITCODE_E2E=1 TEST_URL=http://127.0.0.1:5057 node scripts/participant_policy_smoke.cjs`, with Playwright available and an isolated server/database. This script resets its target event. Never target participant data.
+- Homepage demo source and animation files were unchanged by this update.
+
+
+## Field review, focus enforcement, and full-page dots · 3 October 2026
+
+- 150 Python tests passed, including field-level verdicts, saved-answer isolation, migration, focus-departure deduplication, delayed entry/status handling, and offline departure reconciliation.
+- Answer fields show independent automated verdicts and points in the arena, after refresh, and in the post-round results disclosure. Field scoring is before hint/swap deductions, Double Commit and organizer total overrides.
+- Fullscreen exits, window blur and hidden-tab signals share one departure limit. Reentry must be explicit, visible and focused. Correlated signals count once. Browser signals cannot prevent OS application switching; managed kiosk/exam software is required for that.
+- `scripts/focus_policy_smoke.cjs` deterministically exercises window blur while fullscreen and a hidden-tab event. These event tests simulate focus/visibility transitions; they do not claim to lock the OS or test every operating system's shortcut behavior.
+- The existing DotGrid now covers the viewport across public pages, with 1,600 dots maximum, DPR capped at 1.5, no continuous drawing while idle, and static reduced-motion/no-JavaScript fallbacks. Original demo code and animation controllers are preserved.

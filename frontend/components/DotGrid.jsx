@@ -236,6 +236,7 @@ export default function DotGrid({
     target.addEventListener('pointermove', onMove, { passive: true });
     target.addEventListener('pointerleave', onLeave, { passive: true });
     target.addEventListener('click', onClick, { passive: true });
+    window.addEventListener('blur', onLeave);
     preference.addEventListener('change', syncActivity);
     document.addEventListener('visibilitychange', syncActivity);
     buildGrid();
@@ -250,6 +251,7 @@ export default function DotGrid({
       target.removeEventListener('pointermove', onMove);
       target.removeEventListener('pointerleave', onLeave);
       target.removeEventListener('click', onClick);
+      window.removeEventListener('blur', onLeave);
       preference.removeEventListener('change', syncActivity);
       document.removeEventListener('visibilitychange', syncActivity);
     };

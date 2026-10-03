@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from config import Config
+from answer_feedback import answer_field_results
 
 def get_db_connection():
     db_path = Config.DATABASE_PATH
@@ -45,6 +46,12 @@ def init_db(force_reset=False):
         if name not in columns:
             conn.execute(f"ALTER TABLE submissions ADD COLUMN {name} TEXT")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_request ON submissions(team_id, request_id) WHERE request_id IS NOT NULL")
+    session_columns = {r["name"] for r in conn.execute("PRAGMA table_info(fullscreen_sessions)")}
+    for name in ("active_event_id", "document_id"):
+        if name not in session_columns:
+            conn.execute(f"ALTER TABLE fullscreen_sessions ADD COLUMN {name} TEXT")
+    if "document_started_at" not in session_columns:
+        conn.execute("ALTER TABLE fullscreen_sessions ADD COLUMN document_started_at REAL NOT NULL DEFAULT 0")
     conn.execute("INSERT OR IGNORE INTO competition_controls (id, generation) VALUES (1, ?)", (uuid.uuid4().hex,))
 
     # Preserve activity collected by the original phase 1 implementation.
@@ -72,24 +79,32 @@ def init_db(force_reset=False):
             VALUES (1, 'WAITING', ?, ?, 0)
         """, (dur, dur * 60))
     
-    # Seed Questions from data/questions.json
-    cur.execute("SELECT COUNT(*) as count FROM questions")
-    if cur.fetchone()["count"] == 0 or force_reset:
-        if os.path.exists(Config.QUESTIONS_JSON_PATH):
-            with open(Config.QUESTIONS_JSON_PATH, "r", encoding="utf-8") as f:
-                questions = json.load(f)
-            for q in questions:
-                cur.execute("""
-                    INSERT OR REPLACE INTO questions 
-                    (id, language, title, difficulty, code, error_type, bug_location, expected_output, cause, correction, points, hint, is_active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                """, (
-                    q["id"], q["language"], q["title"], q.get("difficulty", "Medium"),
-                    q["code"], q["error_type"], q["bug_location"], q["expected_output"],
-                    q["cause"], q["correction"], q.get("points", q.get("base_points", 20)),
-                    q.get("hint", "")
-                ))
-                
+    # Versioned, non-destructive bank migration: keep assignments, scores and active flags.
+    question_columns = {r["name"] for r in conn.execute("PRAGMA table_info(questions)")}
+    for name in ("cause_keywords", "correction_keywords"):
+        if name not in question_columns:
+            conn.execute(f"ALTER TABLE questions ADD COLUMN {name} TEXT")
+    bank_version = "c-python-beginner-bank-v1"
+    if not conn.execute("SELECT 1 FROM data_migrations WHERE name = ?", (bank_version,)).fetchone():
+        with open(Config.QUESTIONS_JSON_PATH, encoding="utf-8") as f:
+            questions = json.load(f)
+        for q in questions:
+            cur.execute("""INSERT INTO questions
+                (id, language, title, difficulty, code, error_type, bug_location, expected_output,
+                 cause, correction, points, hint, cause_keywords, correction_keywords)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET language=excluded.language, title=excluded.title,
+                difficulty=excluded.difficulty, code=excluded.code, error_type=excluded.error_type,
+                bug_location=excluded.bug_location, expected_output=excluded.expected_output,
+                cause=excluded.cause, correction=excluded.correction, points=excluded.points,
+                hint=excluded.hint, cause_keywords=excluded.cause_keywords,
+                correction_keywords=excluded.correction_keywords""",
+                (q["id"], q["language"], q["title"], q.get("difficulty", "Medium"), q["code"],
+                 q["error_type"], q["bug_location"], q["expected_output"], q["cause"], q["correction"],
+                 q.get("points", q.get("base_points", 20)), q.get("hint", ""),
+                 json.dumps(q.get("cause_keywords", [])), json.dumps(q.get("correction_keywords", []))))
+        conn.execute("INSERT INTO data_migrations(name) VALUES (?)", (bank_version,))
+
     conn.commit()
     conn.close()
 
@@ -211,6 +226,28 @@ def assign_initial_questions(team_id, cur=None):
         if close_conn:
             conn.close()
 
+def _answer_summary(conn, team_id, question_id, points, include_submission=False):
+    row = conn.execute("SELECT * FROM submissions WHERE team_id = ? AND question_id = ? ORDER BY is_accepted DESC, total_score DESC, id ASC LIMIT 1", (team_id, question_id)).fetchone()
+    result = {"is_answered": bool(row), "answer_status": None, "awarded_score": 0, "max_score": points}
+    if row:
+        evaluation = json.loads(row["response_json"] or "{}")
+        raw = sum(row[key] for key in ("error_loc_score", "error_type_score", "cause_score", "output_score", "correction_score"))
+        result.update(awarded_score=row["total_score"], max_score=evaluation.get("max_score", points * (2 if row["is_double_commit"] else 1)),
+                      answer_status=evaluation.get("answer_status") or ("correct" if raw >= points else "partial" if raw > 0 else "incorrect"))
+        if row["override_reason"]:
+            result["answer_status"] = "correct" if row["total_score"] >= result["max_score"] else "partial" if row["total_score"] > 0 else "incorrect"
+        # Saved component scores also support older submissions without a stored
+        # field breakdown. Do not regrade or include reference/keyword content.
+        result["field_results"] = answer_field_results(dict(row), evaluation.get("base_points", points))
+        result["score_overridden"] = bool(row["override_reason"])
+        result["penalties"] = evaluation.get("penalties", {})
+        for key in ("hint_used", "swap_used", "is_double_commit"):
+            result[key] = evaluation.get(key, 0)
+        if include_submission:
+            result["submission"] = {key: row[key] for key in ("error_location", "error_type", "expected_output", "cause", "correction")}
+    return result
+
+
 def get_team_assigned_questions(team_id):
     """Returns list of assigned questions with progression status for the team."""
     conn = get_db_connection()
@@ -224,6 +261,8 @@ def get_team_assigned_questions(team_id):
         ORDER BY qa.question_order ASC
     """, (team_id,))
     rows = [dict(r) for r in cur.fetchall()]
+    for row in rows:
+        row.update(_answer_summary(conn, team_id, row["id"], row["points"]))
     conn.close()
     return rows
 
@@ -242,8 +281,11 @@ def get_client_question(team_id, question_id):
         WHERE qa.team_id = ? AND qa.question_id = ? AND qa.is_abandoned = 0 AND qa.is_unlocked = 1
     """, (team_id, question_id))
     q = cur.fetchone()
+    result = dict(q) if q else None
+    if result:
+        result.update(_answer_summary(conn, team_id, question_id, result["points"], include_submission=True))
     conn.close()
-    return dict(q) if q else None
+    return result
 
 def unlock_next_question(team_id, current_order, cur=None):
     """Unlocks the next sequential question for the team."""

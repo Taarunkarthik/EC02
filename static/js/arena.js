@@ -4,8 +4,11 @@
   const fields = ['error_location', 'error_type', 'expected_output', 'cause', 'correction'];
   let root, form, qid, progress, generation, draftKey, dirty = false, busy = false, switching = false, submitted = false, requestID = null, reviews = {}, saveTimeout, syncPending = false, loadSerial = 0;
   const byId = id => document.getElementById(id);
+  const navigate = url => window.ParticipantGuard ? window.ParticipantGuard.navigate(url, { replace: true }) : location.replace(url);
   const canSubmit = () => App.eventState?.event_status === 'LIVE' && Number(App.eventState.remaining_seconds) > 0;
   const current = () => progress?.questions.find(q => q.id === qid);
+  const isAnswered = () => submitted || !!(current()?.is_answered ?? current()?.is_completed);
+  const statusLabel = status => ({ correct: '✓ Correct', partial: '◐ Partially correct', incorrect: '✕ Incorrect' })[status] || 'Answer locked';
   const value = () => Object.fromEntries(fields.map(name => [name, byId(name).value]));
   const draftNamespace = () => `ex0:draft:${generation}:${root.dataset.teamId}:`;
   function setDraftKey() { draftKey = `${draftNamespace()}${qid}`; }
@@ -16,13 +19,75 @@
   }
   function restoreDraft() {
     setDraftKey();
-    const draft = App.storage.get(draftKey);
+    const draft = isAnswered() ? null : App.storage.get(draftKey);
     fields.forEach(name => { byId(name).value = typeof draft?.[name] === 'string' ? draft[name] : ''; byId(name).removeAttribute('aria-invalid'); document.querySelector(`[data-error-for="${name}"]`).textContent = ''; });
-    requestID = draft?.request_id || null; dirty = !!draft; submitted = false;
+    requestID = draft?.request_id || null; dirty = !!draft; submitted = !!(current()?.is_answered ?? current()?.is_completed);
     byId('draft-status').textContent = draft ? 'Draft restored from this device' : 'Drafts save on this device';
     CodeEditor.selectLine(byId('error_location').value, false);
     byId('form-feedback-alert').hidden = true; byId('next-question').hidden = true; byId('submission-trace').hidden = true;
-    updateReview(); updateControls();
+    updateReview(); renderAnswerStatus(); updateControls();
+  }
+  function hydrateSubmission(question) {
+    if (question?.submission) {
+      fields.forEach(name => { byId(name).value = question.submission[name] ?? ''; });
+      CodeEditor.selectLine(byId('error_location').value, false);
+    }
+  }
+  function renderAnswerStatus(result = current()) {
+    const status = byId('answer-status');
+    status.hidden = !isAnswered();
+    renderFieldResults(isAnswered() ? result?.field_results : null);
+    if (!isAnswered()) return;
+    const verdict = result?.answer_status || current()?.answer_status;
+    const earned = result?.awarded_score ?? result?.total_score ?? 0;
+    const maximum = result?.max_score ?? result?.base_points ?? current()?.points ?? 0;
+    status.className = `answer-status status-${verdict || 'locked'}`;
+    const summary = document.createElement('strong');
+    summary.textContent = `${statusLabel(verdict)} · ${earned} / ${maximum} pts`;
+    const description = document.createElement('span');
+    const modifiers = [];
+    if (result?.hint_used) modifiers.push('hint: −10% base points');
+    if (result?.swap_used) modifiers.push('swap: −10% base points');
+    if (result?.is_double_commit) modifiers.push('Double Commit applied');
+    description.textContent = `This answer is final.${modifiers.length ? ' ' + modifiers.join(' · ') + '.' : ''}`;
+    status.replaceChildren(summary, description);
+    if (Array.isArray(result?.field_results)) {
+      const heading = document.createElement('strong');
+      heading.className = 'answer-breakdown-heading'; heading.textContent = 'Your answer, part by part';
+      const breakdown = document.createElement('ul'); breakdown.className = 'answer-breakdown';
+      for (const field of result.field_results) {
+        if (!fields.includes(field.key) || !['correct', 'partial', 'incorrect'].includes(field.status)) continue;
+        const item = document.createElement('li'); item.dataset.field = field.key;
+        const label = document.createElement('span'); label.textContent = field.label;
+        const outcome = document.createElement('strong'); outcome.className = `status-${field.status}`;
+        outcome.textContent = `${statusLabel(field.status)} · ${field.score} / ${field.max_score}`;
+        item.append(label, outcome); breakdown.append(item);
+      }
+      const note = document.createElement('span'); note.className = 'answer-breakdown-note';
+      note.textContent = 'Automated field scores before hints, swaps and Double Commit. Organizer overrides change the total only.';
+      if (result.score_overridden) note.textContent += ' Your total includes an organizer adjustment.';
+      status.append(heading, breakdown, note);
+    }
+    byId('draft-status').textContent = 'Answer locked on the server';
+    const next = progress?.questions.find(q => q.is_unlocked && !(q.is_answered ?? q.is_completed) && q.id !== qid);
+    byId('next-question').hidden = !next; byId('next-question').dataset.next = next?.id || '';
+  }
+  function renderFieldResults(results) {
+    for (const name of fields) {
+      const input = byId(name); const container = input.closest('.field');
+      const id = `field-result-${name}`;
+      byId(id)?.remove(); delete container.dataset.answerStatus;
+      const descriptions = (input.getAttribute('aria-describedby') || '').split(/\s+/).filter(value => value && value !== id);
+      const result = Array.isArray(results) ? results.find(item => item.key === name && ['correct', 'partial', 'incorrect'].includes(item.status)) : null;
+      if (result) {
+        const badge = document.createElement('small'); badge.id = id; badge.className = `field-result status-${result.status}`;
+        badge.textContent = `${statusLabel(result.status)} · ${result.score} / ${result.max_score} pts`;
+        input.insertAdjacentElement('afterend', badge); container.dataset.answerStatus = result.status;
+        descriptions.push(id);
+      }
+      if (descriptions.length) input.setAttribute('aria-describedby', descriptions.join(' '));
+      else input.removeAttribute('aria-describedby');
+    }
   }
   function updateReview() {
     const reviewed = !!reviews[qid];
@@ -35,20 +100,23 @@
     });
   }
   function updateControls() {
-    const disabled = !canSubmit() || busy || switching || !qid || !progress;
+    const locked = isAnswered();
+    const disabled = !canSubmit() || busy || switching || !qid || !progress || locked;
     byId('commit-fix-btn').disabled = disabled;
     byId('commit-fix-btn').classList.toggle('loading', busy);
-    byId('commit-fix-btn').textContent = busy ? 'VALIDATING…' : !canSubmit() ? (App.eventState?.event_status === 'PAUSED' ? 'EVENT PAUSED' : 'SUBMISSIONS CLOSED') : submitted ? 'COMMIT UPDATED FIX →' : '⑂  COMMIT FIX  →';
+    byId('commit-fix-btn').textContent = busy ? 'VALIDATING…' : !canSubmit() ? (App.eventState?.event_status === 'PAUSED' ? 'EVENT PAUSED' : 'SUBMISSIONS CLOSED') : locked ? 'ANSWER LOCKED' : '⑂  LOCK ANSWER  →';
     document.querySelectorAll('[data-powerup]').forEach(button => {
       const key = button.dataset.powerup.toUpperCase().replaceAll('-', '_');
       const pu = progress?.powerups?.[key];
       button.disabled = disabled || !!pu?.is_used || !!pu?.is_armed;
       const label = button.querySelector('[data-powerup-status]');
-      const descriptions = { 'rubber-duck': 'Get a hint · −10% base points', 'git-revert': 'Replace this challenge', 'double-commit': 'Double points or zero' };
+      const descriptions = { 'rubber-duck': 'Get a hint · −10% base points', 'git-revert': 'Replace challenge · −10% base points', 'double-commit': 'Double points or zero' };
       label.textContent = pu?.is_used ? 'Used' : pu?.is_armed ? 'Armed for next submission' : descriptions[button.dataset.powerup];
       if (button.dataset.powerup === 'git-revert' && current()?.is_completed) button.disabled = true;
     });
-    fields.forEach(name => { byId(name).disabled = busy || switching; });
+    fields.forEach(name => { byId(name).disabled = busy || switching || locked || !progress; });
+    byId('review-toggle').disabled = locked;
+    document.querySelectorAll('#code-viewer-container .line-number').forEach(button => { button.disabled = busy || switching || locked || !progress; });
   }
   function renderProgress(data) {
     progress = data;
@@ -60,22 +128,23 @@
     const list = byId('question-list'); const fragment = document.createDocumentFragment();
     for (const question of data.questions) {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'question-item'; button.dataset.question = question.id; button.dataset.order = question.question_order; button.dataset.completed = question.is_completed ? '1' : '0';
+      if (question.answer_status) button.classList.add(`answer-${question.answer_status}`);
       button.disabled = !question.is_unlocked; button.classList.toggle('current', question.id === qid); button.classList.toggle('completed', !!question.is_completed);
       if (question.id === qid) button.setAttribute('aria-current', 'true');
       button.title = `Question ${question.question_order} · ${question.difficulty} · ${question.points} points`;
       const number = document.createElement('span'); number.className = 'question-number'; number.textContent = String(question.question_order).padStart(2, '0');
-      const label = document.createElement('span'); label.className = 'question-label'; const language = document.createElement('strong'); language.textContent = question.language; const info = document.createElement('small'); info.textContent = `${question.points} pts · ${question.difficulty}`; label.append(language, info);
-      const symbol = document.createElement('span'); symbol.className = 'question-symbol'; symbol.textContent = question.is_completed ? '✓' : question.id === qid ? '●' : question.is_unlocked ? '○' : '−'; symbol.setAttribute('aria-label', question.is_completed ? 'Submitted' : question.is_unlocked ? 'Available' : 'Locked');
+      const label = document.createElement('span'); label.className = 'question-label'; const language = document.createElement('strong'); language.textContent = question.language; const info = document.createElement('small'); info.textContent = question.is_answered ? `${question.awarded_score} / ${question.max_score ?? question.points} pts · ${statusLabel(question.answer_status).replace(/^[^ ]+ /, '')}` : `${question.points} pts · ${question.difficulty}`; label.append(language, info);
+      const symbol = document.createElement('span'); symbol.className = 'question-symbol'; symbol.textContent = question.answer_status === 'incorrect' ? '✕' : question.answer_status === 'partial' ? '◐' : question.is_completed ? '✓' : question.id === qid ? '●' : question.is_unlocked ? '○' : '−'; symbol.setAttribute('aria-label', question.answer_status ? statusLabel(question.answer_status) : question.is_completed ? 'Submitted' : question.is_unlocked ? 'Available' : 'Locked');
       button.append(number, label, symbol); fragment.append(button);
     }
-    const scroll = list.scrollTop; list.replaceChildren(fragment); list.scrollTop = scroll; updateReview(); updateControls();
+    const scroll = list.scrollTop; list.replaceChildren(fragment); list.scrollTop = scroll; updateReview(); renderAnswerStatus(); updateControls();
   }
   async function syncProgress() {
     if (syncPending) return;
     syncPending = true;
     try {
       const data = await App.request('/api/team-progress');
-      if (generation && data.generation !== generation) { location.replace('/register'); return; }
+      if (generation && data.generation !== generation) { navigate('/register'); return; }
       generation = data.generation; renderProgress(data); return data;
     } catch (err) { if (err.status === 401 || err.status === 403) { byId('arena-state-notice').hidden = false; byId('arena-state-notice').textContent = err.message; progress = null; updateControls(); } }
     finally { syncPending = false; }
@@ -88,11 +157,12 @@
     try {
       const data = await App.request(`/api/question/${encodeURIComponent(id)}`);
       if (serial !== loadSerial) return;
-      const q = data.question; qid = q.id; byId('form-question-id').value = qid;
+      const q = data.question; submitted = false; qid = q.id;
+      const known = current(); if (known) Object.assign(known, q); byId('form-question-id').value = qid;
       byId('breadcrumb-question').textContent = qid; byId('question-title').textContent = q.title; byId('question-difficulty').textContent = q.difficulty; byId('question-points').textContent = `${q.points} PTS`; byId('source-language').textContent = q.language;
-      byId('source-filename').textContent = ({ Python: 'main.py', Java: 'Main.java', C: 'main.c', 'C++': 'main.cpp' })[q.language] || 'source';
+      byId('source-filename').textContent = ({ Python: 'main.py', C: 'main.c' })[q.language] || 'source';
       byId('challenge-number').textContent = `CHALLENGE ${String(current()?.question_order || qid).padStart(2, '0')}`;
-      CodeEditor.render(q.code); restoreDraft(); byId('rubber-duck-hint-box').hidden = true;
+      CodeEditor.render(q.code); restoreDraft(); hydrateSubmission(q); byId('rubber-duck-hint-box').hidden = true;
       if (progress) renderProgress(progress);
       if (push) history.pushState({ question: qid }, '', `/arena?q=${encodeURIComponent(qid)}`);
       document.title = `${qid} · Debug Arena — EXIT CODE 0`;
@@ -110,8 +180,10 @@
     firstInvalid?.focus(); return !firstInvalid;
   }
   async function submit(event) {
-    event.preventDefault(); if (busy || !canSubmit() || !validate()) return;
-    busy = true; submitted = false;
+    event.preventDefault(); if (busy || isAnswered() || !canSubmit() || !progress || !validate()) return;
+    busy = true; updateControls();
+    if (!await App.confirm('Your answer will be scored and locked. You cannot edit or submit this question again.', { title: 'Lock this answer?', confirmText: 'Lock answer' })) { busy = false; updateControls(); return; }
+    if (isAnswered() || !canSubmit()) { busy = false; updateControls(); return; }
     requestID ||= (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
     dirty = true; saveDraft(); updateControls();
     const activity = App.activity(byId('submission-trace'), 'Waiting for server validation…');
@@ -119,26 +191,29 @@
       const data = await App.request('/api/submit-bug-fix', { method: 'POST', body: { question_id: qid, request_id: requestID, ...value() } });
       activity.finish(true, 'Submission recorded');
       submitted = true; dirty = false; App.storage.remove(draftKey); requestID = null;
-      const alert = byId('form-feedback-alert'); alert.hidden = false; alert.className = 'alert alert-success'; alert.textContent = `Submission recorded. Score awarded: ${data.result.total_score} / ${data.result.base_points} base points${data.result.is_double_commit ? ' · Double Commit applied' : ''}. Your best score is retained.`;
+      const result = { ...data.result, is_answered: true, is_completed: true, awarded_score: data.result.total_score };
+      if (current()) Object.assign(current(), result);
+      renderAnswerStatus(result);
+      const alert = byId('form-feedback-alert'); alert.hidden = true;
       byId('draft-status').textContent = 'Submission saved to server ✓';
       byId('arena-team-score').textContent = data.new_score;
       byId('arena-team-score').classList.add('score-changed');
-      App.toast('Submission recorded.', 'success');
+      App.toast(`${statusLabel(data.result.answer_status)}. Answer locked.`, data.result.answer_status === 'incorrect' ? 'warning' : 'success');
       await syncProgress();
       const next = progress?.questions.find(q => q.is_unlocked && !q.is_completed && q.id !== qid);
       byId('next-question').hidden = !next; byId('next-question').dataset.next = next?.id || '';
-      alert.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest' });
+      byId('answer-status').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest' });
     } catch (err) {
       activity.finish(false, 'Submission not confirmed');
       const alert = byId('form-feedback-alert'); alert.hidden = false; alert.className = 'alert alert-warning'; alert.textContent = err.message;
       if (!err.offline && err.status < 500) requestID = null;
-      App.toast(err.message, 'error'); EventClock.sync();
+      App.toast(err.message, 'error'); EventClock.sync(); await syncProgress();
     } finally { busy = false; updateControls(); }
   }
   async function usePowerup(button) {
-    if (busy || !canSubmit()) return;
+    if (busy || isAnswered() || !canSubmit()) return;
     const type = button.dataset.powerup;
-    const descriptions = { 'rubber-duck': ['Use Rubber Duck?', 'Reveal one hint. This deducts 10% of the base points from this challenge’s scored submission.'], 'git-revert': ['Replace this challenge?', 'Git Revert abandons this challenge permanently and assigns an alternative. You can use it once.'], 'double-commit': ['Arm Double Commit?', 'Your next submission scores 2× if it earns at least 60% accuracy; otherwise it scores zero. You can use this once.'] };
+    const descriptions = { 'rubber-duck': ['Use Rubber Duck?', 'Reveal one hint. This deducts 10% of the base points from this challenge’s scored submission.'], 'git-revert': ['Replace this challenge?', 'Git Revert replaces this challenge permanently. The replacement has a 10% base-point penalty. Any hint penalty carries over. You can use it once.'], 'double-commit': ['Arm Double Commit?', 'Your next submission scores 2× if it earns at least 60% accuracy; otherwise it scores zero. You can use this once.'] };
     if (!await App.confirm(descriptions[type][1], { title: descriptions[type][0], confirmText: 'Activate' })) return;
     busy = true; updateControls(); button.classList.add('loading');
     try {
@@ -154,8 +229,8 @@
     if (!root) return;
     const notice = byId('arena-state-notice');
     if (state.event_status === 'PAUSED') { notice.hidden = false; notice.textContent = 'Competition paused by the organizers. Your draft is saved; submissions will resume with the event.'; }
-    else if (state.event_status === 'COMPLETED') { saveDraft(); notice.hidden = false; notice.textContent = 'Debugging complete. Submissions are locked. Opening your results…'; setTimeout(() => location.replace('/result'), 1400); }
-    else if (state.event_status === 'WAITING') { saveDraft(); location.replace('/waiting'); }
+    else if (state.event_status === 'COMPLETED') { saveDraft(); notice.hidden = false; notice.textContent = 'Debugging complete. Submissions are locked. Opening your results…'; setTimeout(() => navigate('/result'), 1400); }
+    else if (state.event_status === 'WAITING') { saveDraft(); navigate('/waiting'); }
     else notice.hidden = true;
     updateControls();
   }
@@ -164,7 +239,7 @@
     form = byId('bug-fix-form'); qid = byId('form-question-id').value;
     if (qid) history.replaceState({ question: qid }, '', `/arena?q=${encodeURIComponent(qid)}`);
     form.addEventListener('submit', submit);
-    form.addEventListener('input', () => { dirty = true; submitted = false; requestID = null; byId('draft-status').textContent = 'Saving draft…'; clearTimeout(saveTimeout); saveTimeout = setTimeout(saveDraft, 350); updateControls(); });
+    form.addEventListener('input', () => { if (isAnswered()) return; dirty = true; requestID = null; byId('draft-status').textContent = 'Saving draft…'; clearTimeout(saveTimeout); saveTimeout = setTimeout(saveDraft, 350); updateControls(); });
     form.addEventListener('paste', event => { event.preventDefault(); App.toast('Pasting answers is restricted in competition mode.', 'warning'); });
     byId('question-list').addEventListener('click', event => { const button = event.target.closest('[data-question]'); if (button && !button.disabled) selectQuestion(button.dataset.question); });
     byId('next-question').addEventListener('click', () => selectQuestion(byId('next-question').dataset.next));
@@ -174,8 +249,10 @@
     window.addEventListener('pagehide', saveDraft);
     window.addEventListener('popstate', () => { const target = new URLSearchParams(location.search).get('q') || progress?.questions.find(q => q.is_unlocked && !q.is_completed)?.id || progress?.questions[0]?.id; selectQuestion(target, false); });
     document.addEventListener('visibilitychange', () => { if (document.hidden) saveDraft(); else syncProgress(); });
+    updateControls();
     const data = await syncProgress();
-    if (data) { reviews = App.storage.get(`${draftNamespace()}reviews`, {}); restoreDraft(); }
+    if (data) { reviews = App.storage.get(`${draftNamespace()}reviews`, {}); restoreDraft();
+      if (isAnswered()) { const initialID = qid; try { const answer = await App.request(`/api/question/${encodeURIComponent(initialID)}`); if (qid === initialID) hydrateSubmission(answer.question); } catch (_) { /* Score and answer lock remain visible during a network failure. */ } } }
     else { byId('draft-status').textContent = 'Reconnect to enable saved drafts'; }
     if (App.eventState) onState(App.eventState);
     setInterval(async () => { if (!document.hidden) { const first = !generation; const data = await syncProgress(); if (first && data) { reviews = App.storage.get(`${draftNamespace()}reviews`, {}); if (dirty) { setDraftKey(); saveDraft(); } else restoreDraft(); } } }, 10000);

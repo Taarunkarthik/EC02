@@ -158,6 +158,11 @@ def run_critical_scenario_checks():
             sess["team_id"] = tid_a
             sess["team_name"] = "Team Alpha"
 
+        # Establish the participant's fullscreen state before checking the closed-round guard.
+        entered = client.post("/api/activity", json={
+            "event_type": "fullscreen_enter", "event_id": "acceptance-post-event-enter"
+        })
+        assert entered.status_code == 200
         res_post_end = client.post("/api/submit-bug-fix", json={
             "question_id": "Q01",
             "error_location": "3",

@@ -48,13 +48,13 @@ python app.py
 - Full-height arena with sequential question navigation, syntax-highlighted read-only code, clickable error-line numbers, review markers, partial-credit response fields, and all three existing power-ups.
 - Unsent drafts saved locally per event generation, team, and question. Successful submissions clear their draft. Local storage contains participant text and review markers only.
 - Server-confirmed submission feedback, idempotent retries after connection loss, live progress, connection status, and synchronized countdown display.
-- Fullscreen entry/recovery and advisory focus signals. Unsupported fullscreen does not exclude participants. Browser restrictions are deterrents, not a guarantee against cheating.
+- Fullscreen is required on every signed-in participant page until logout. The first fullscreen exit, app switch, or tab switch warns; a second distinct departure persistently blocks the team across both rounds and future logins. One departure is counted once even if the browser reports several signals. Unsupported browsers must switch to a fullscreen-capable desktop browser. Fullscreen signals are browser-reported; this is not kiosk software.
 - Live leaderboard, own-team highlighting, rank movement, provisional/frozen states, and explicitly published final results.
 - Separate rapid-fire quiz after debugging. **Quiz points never enter debugging scores or final ranking.**
 
 ### Question bank and scoring
 
-All teams retain the existing common set of **30 questions**, with sequential unlocking. The bank contains 10 questions each for Python, C, and Java, but their difficulty distributions differ; there are no C++ questions. Language selection is deliberately deferred rather than assigning unequal tracks or showing an unsupported option.
+All teams retain the existing common set of **30 questions**, with sequential unlocking. The bank contains 15 Python questions and 15 C questions, focused on first-year programming fundamentals. The ten-question rapid-fire quiz also uses C and Python only. All teams use the same mixed-language track.
 
 The existing rubric is retained:
 
@@ -66,7 +66,7 @@ The existing rubric is retained:
 | Expected output | 20% |
 | Correction | 30% |
 
-The server keeps the highest accepted score for each question. Intentional resubmissions can improve a score; repeating the same request ID does not create another submission. Double Commit and Rubber Duck modifiers retain their established behavior. Correct answers stay in server data and authenticated organizer views, never participant HTML or JSON.
+Each debugging answer is final after its first submission, even when incorrect. A retry with the same request ID returns the original result. Cause and correction each require at least two distinct relevant keywords for any credit. Rubber Duck and Git Revert each deduct 10% of base points from the affected answer, after Double Commit; deductions add together and scores cannot fall below zero. A hint used before a swap carries its deduction onto the replacement. Participants see correct, partial, or incorrect status and their saved answers, while reference answer keys remain private.
 
 Power-ups remain one use per team: **Rubber Duck** reveals a hint with a 10% base-point deduction, **Git Revert** replaces an uncompleted question, and **Double Commit** awards double points at ≥60% accuracy or zero otherwise.
 
@@ -76,7 +76,7 @@ Power-ups remain one use per team: **Rubber Duck** reveals a hint with a 10% bas
 2. Use **Teams** and **Questions** to search the roster and question bank. Inspecting answers is restricted to the organizer console.
 3. In **Event control**, start debugging. Pause preserves remaining server time; resume continues it. Ending requires confirmation and locks submissions.
 4. In **Submissions**, review participant responses and apply bounded score adjustments with a reason.
-5. Inspect **Security** for focus losses, tab switches, fullscreen exits, and last activity. These signals never automatically penalize or disqualify a team.
+5. Inspect **Security** for focus losses, tab switches, fullscreen exits, and last activity. Two departures block the account, including app focus loss and browser tab switches. Review a block in Security, then use Teams → Enable to restore access and reset the violation count.
 6. After debugging ends, open **Quiz**. The quiz has 10 questions, a 10-minute session deadline, and 60-second server-controlled question deadlines. Refreshing does not reset them.
 7. Verify debugging standings, then **Publish final results** in **Leaderboard**. The participant results page shows final rank and podium only after publication.
 8. Export roster/results as CSV. In **Settings**, reset only after exporting anything needed. Reset requires typing **RESET EVENT** and clears quiz/activity data as well as competition progress.
@@ -111,7 +111,7 @@ See `VERIFICATION.md` for the final local browser coverage and any remaining man
 - `templates/arena.html`, `static/css/arena.css`: competition workspace.
 - `static/css/style.css`: shared tokens and components; `public.css` and `admin.css` scope page-specific layouts.
 - `static/js/main.js`, `timer.js`: shared request, modal, toast, storage, and event polling utilities.
-- `static/js/editor.js`, `arena.js`, `competition.js`: source interaction, submissions/drafts, and fullscreen/activity behavior.
+- `static/js/editor.js`, `arena.js`, `participant-guard.js`: source interaction, submissions/drafts, and fullscreen/activity behavior.
 - Public page scripts handle registration, lobby, standings, homepage demonstration, quiz, and results separately.
 
 All work can be reviewed locally. No push or deployment is required.
@@ -151,3 +151,8 @@ Previous phase 1 files are preserved in `.local-backups/`. Existing `activity_ev
 `VERIFICATION.md` records the final checks. `scripts/redesign_smoke.cjs` checks responsive layouts, actual component rendering and the authorized demo enhancement. `scripts/demo_motion_smoke.cjs` checks the demo sequence, pausing, offscreen suspension, reduced motion, mobile layout, and surrounding pixels against a locally captured baseline. `scripts/animation_pacing.cjs` records frame intervals while the seven effects run. Both use only the local preview and do not reset the competition. The animation report is generated at `artifacts/animation-performance.json`.
 
 All continuous canvas effects suspend when hidden/offscreen and honor reduced-motion preferences. DotGrid draws only when changed; expensive electric-logo rasterization is cached and scheduled separately from interaction. Canvas resolutions and dot counts are bounded. The local results do not replace testing on the actual lab hardware.
+
+### Quiz review and feedback
+The ten rapid-fire questions use only C and Python and focus on first-year fundamentals. Each locked answer shows a tick, cross, or missed-question status; answer changes remain disabled. After completion, teams can submit six required ratings (1–5) and an optional note of up to 2,000 characters. Organizers can read responses in **Feedback**. Feedback and quiz points do not alter debugging rankings.
+
+Question-bank updates use a versioned migration. Existing teams, submissions, assignments, scores and question active flags are preserved. Historical scores are not automatically regraded against revised questions.
