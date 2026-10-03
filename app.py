@@ -27,8 +27,15 @@ from participant_policy import guard_snapshot, fullscreen_signal, feedback_snaps
 from quiz import quiz_snapshot, start_quiz, answer_quiz, QUESTIONS as QUIZ_QUESTIONS, QUIZ_MINUTES
 
 app = Flask(__name__)
-app.config.update(SECRET_KEY=Config.SECRET_KEY, SESSION_COOKIE_HTTPONLY=True,
-                  SESSION_COOKIE_SAMESITE="Lax", MAX_CONTENT_LENGTH=64 * 1024)
+app.config.update(
+    SECRET_KEY=Config.SECRET_KEY,
+    SESSION_COOKIE_NAME="ex0_session",
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_PATH="/",
+    MAX_CONTENT_LENGTH=64 * 1024,
+)
 
 # Initialize database schema and seeds
 init_db()
@@ -39,6 +46,8 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get("is_admin"):
+            if request.path.startswith("/api/admin/"):
+                return jsonify(success=False, error="Your organizer session has ended. Sign in again to continue."), 401
             return redirect(url_for("admin_login", next=request.path))
         return f(*args, **kwargs)
     return decorated_function
@@ -1024,7 +1033,8 @@ def api_admin_dashboard_data():
             MAX(a.created_at) AS last_seen, COALESCE(ps.blocked, 0) AS blocked,
             COALESCE(ps.violations, 0) AS violations
             FROM teams t LEFT JOIN team_activity a ON a.team_id = t.id
-            LEFT JOIN participant_security ps ON ps.team_id = t.id GROUP BY t.id ORDER BY t.name""")]
+            LEFT JOIN participant_security ps ON ps.team_id = t.id
+            GROUP BY t.id, t.name, ps.blocked, ps.violations ORDER BY t.name""")]
         controls = dict(conn.execute("SELECT * FROM competition_controls WHERE id = 1").fetchone())
         quiz_data = {"status": controls["quiz_status"], "question_count": len(QUIZ_QUESTIONS), "duration_minutes": QUIZ_MINUTES,
                      "participants": conn.execute("SELECT COUNT(*) FROM quiz_sessions").fetchone()[0],

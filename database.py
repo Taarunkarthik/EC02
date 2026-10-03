@@ -54,6 +54,12 @@ def prepare_compat_sql(sql):
         sql_text,
         flags=re.I,
     )
+    sql_text = re.sub(
+        r"(\b[\w.]*created_at)\s*>=\s*CURRENT_TIMESTAMP",
+        r"\1::timestamptz >= CURRENT_TIMESTAMP",
+        sql_text,
+        flags=re.I,
+    )
     sql_text = sql_text.replace("MIN(violations + 1, ?)", "LEAST(violations + 1, ?)")
 
     if upper_sql.startswith("INSERT OR IGNORE"):

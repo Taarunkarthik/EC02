@@ -23,7 +23,7 @@ def test_prepare_compat_sql_rewrites_sqlite_only_statements():
     """
     normalized = prepare_compat_sql(dashboard_sql)
     assert "STRING_AGG(name, ', ')" in normalized
-    assert "CURRENT_TIMESTAMP - INTERVAL '-5 minutes'" in normalized
+    assert "created_at::timestamptz >= CURRENT_TIMESTAMP - INTERVAL '-5 minutes'" in normalized
     assert prepare_compat_sql("UPDATE participant_security SET violations = MIN(violations + 1, ?)") == (
         "UPDATE participant_security SET violations = LEAST(violations + 1, %s)"
     )
