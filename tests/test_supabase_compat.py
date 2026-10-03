@@ -15,3 +15,15 @@ def test_prepare_compat_sql_rewrites_sqlite_only_statements():
 
     begin_sql = "BEGIN IMMEDIATE"
     assert prepare_compat_sql(begin_sql) == "BEGIN"
+
+    dashboard_sql = """
+        SELECT GROUP_CONCAT(name, ', ') AS members
+        FROM participants
+        WHERE created_at >= datetime('now', '-5 minutes')
+    """
+    normalized = prepare_compat_sql(dashboard_sql)
+    assert "STRING_AGG(name, ', ')" in normalized
+    assert "CURRENT_TIMESTAMP - INTERVAL '-5 minutes'" in normalized
+    assert prepare_compat_sql("UPDATE participant_security SET violations = MIN(violations + 1, ?)") == (
+        "UPDATE participant_security SET violations = LEAST(violations + 1, %s)"
+    )

@@ -42,6 +42,20 @@ def prepare_compat_sql(sql):
     if upper_sql.startswith("BEGIN IMMEDIATE"):
         return "BEGIN"
 
+    sql_text = re.sub(
+        r"GROUP_CONCAT\s*\(\s*([^,()]+?)\s*,\s*([^()]+?)\s*\)",
+        r"STRING_AGG(\1, \2)",
+        sql_text,
+        flags=re.I,
+    )
+    sql_text = re.sub(
+        r"datetime\(\s*'now'\s*,\s*'(-\d+\s+(?:second|seconds|minute|minutes))'\s*\)",
+        r"CURRENT_TIMESTAMP - INTERVAL '\1'",
+        sql_text,
+        flags=re.I,
+    )
+    sql_text = sql_text.replace("MIN(violations + 1, ?)", "LEAST(violations + 1, ?)")
+
     if upper_sql.startswith("INSERT OR IGNORE"):
         sql_text = re.sub(r"(?is)^INSERT\s+OR\s+IGNORE\s+INTO\b", "INSERT INTO", sql_text)
         sql_text = sql_text.rstrip(";")

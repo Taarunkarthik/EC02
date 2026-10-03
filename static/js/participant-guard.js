@@ -148,6 +148,7 @@
   async function check() {
     if (navigating || blocked || document.hidden) return;
     if (active && (!focused() || !fullscreen())) { departure(fullscreen() ? 'window_blur' : 'fullscreen_exit'); return; }
+    if (!active && !busy && fullscreen() && focused()) { enter(); return; }
     const checkedActivation = active && !busy ? activationID : null;
     try {
       const state = await App.request('/api/fullscreen/status');
