@@ -1,0 +1,17 @@
+from database import normalize_database_url, prepare_compat_sql
+
+
+def test_normalize_database_url_converts_supabase_uri():
+    raw = "postgres://postgres:secret@aws-0-region.pooler.supabase.com:6543/postgres"
+    expected = "postgresql://postgres:secret@aws-0-region.pooler.supabase.com:6543/postgres"
+    assert normalize_database_url(raw) == expected
+
+
+def test_prepare_compat_sql_rewrites_sqlite_only_statements():
+    insert_sql = "INSERT OR IGNORE INTO competition_controls (id, generation) VALUES (?, ?)"
+    assert prepare_compat_sql(insert_sql) == (
+        "INSERT INTO competition_controls (id, generation) VALUES (%s, %s) ON CONFLICT DO NOTHING"
+    )
+
+    begin_sql = "BEGIN IMMEDIATE"
+    assert prepare_compat_sql(begin_sql) == "BEGIN"

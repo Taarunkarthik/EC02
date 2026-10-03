@@ -1,13 +1,176 @@
-import sqlite3
 import json
 import os
+import re
+import sqlite3
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
 from config import Config
 from answer_feedback import answer_field_results
 
+
+def normalize_database_url(raw_url):
+    if not raw_url:
+        return raw_url
+    value = raw_url.strip()
+    if value.startswith("postgres://"):
+        value = "postgresql://" + value[len("postgres://"):]
+    return value
+
+
+def prepare_compat_sql(sql):
+    sql_text = (sql or "").strip()
+    if not sql_text:
+        return sql_text
+
+    upper_sql = sql_text.upper()
+    if "PRAGMA TABLE_INFO(" in upper_sql:
+        table_name = re.search(r"PRAGMA\s+TABLE_INFO\s*\(\s*([A-Za-z0-9_]+)\s*\)", sql_text, re.I)
+        if table_name:
+            table = table_name.group(1)
+            return (
+                f"SELECT column_name AS name FROM information_schema.columns "
+                f"WHERE table_schema = 'public' AND table_name = '{table}' "
+                "ORDER BY ordinal_position"
+            )
+
+    if upper_sql.startswith("PRAGMA "):
+        return "SELECT 1"
+    if upper_sql.startswith("BEGIN IMMEDIATE"):
+        return "BEGIN"
+
+    if upper_sql.startswith("INSERT OR IGNORE"):
+        sql_text = re.sub(r"(?is)^INSERT\s+OR\s+IGNORE\s+INTO\b", "INSERT INTO", sql_text)
+        sql_text = sql_text.rstrip(";")
+        if " ON CONFLICT" not in sql_text.upper():
+            sql_text = f"{sql_text} ON CONFLICT DO NOTHING"
+        return sql_text.replace("?", "%s")
+
+    if "INSERT OR IGNORE" in upper_sql:
+        sql_text = re.sub(r"(?is)INSERT\s+OR\s+IGNORE\s+INTO\b", "INSERT INTO", sql_text)
+        sql_text = sql_text.rstrip(";")
+        if " ON CONFLICT" not in sql_text.upper():
+            sql_text = f"{sql_text} ON CONFLICT DO NOTHING"
+
+    return sql_text.replace("?", "%s")
+
+
+def iter_sql_statements(sql_text):
+    buffer = []
+    for raw_line in (sql_text or "").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("--"):
+            continue
+        buffer.append(raw_line)
+        candidate = "\n".join(buffer).strip()
+        if sqlite3.complete_statement(candidate):
+            if candidate:
+                yield candidate
+            buffer = []
+    if buffer:
+        candidate = "\n".join(buffer).strip()
+        if candidate:
+            yield candidate
+
+
+class CompatRow(dict):
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+
+class CompatCursor:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def execute(self, sql, params=None):
+        normalized_sql = prepare_compat_sql(sql)
+        if params is None:
+            self._cursor.execute(normalized_sql)
+        else:
+            self._cursor.execute(normalized_sql, params)
+        return self
+
+    def executemany(self, sql, params_seq):
+        normalized_sql = prepare_compat_sql(sql)
+        self._cursor.executemany(normalized_sql, params_seq)
+        return self
+
+    def fetchone(self):
+        row = self._cursor.fetchone()
+        if row is None:
+            return None
+        if isinstance(row, dict):
+            return CompatRow(row)
+        columns = [col[0] for col in self._cursor.description]
+        return CompatRow(dict(zip(columns, row)))
+
+    def fetchall(self):
+        rows = self._cursor.fetchall()
+        if not rows:
+            return []
+        if isinstance(rows[0], dict):
+            return [CompatRow(row) for row in rows]
+        columns = [col[0] for col in self._cursor.description]
+        return [CompatRow(dict(zip(columns, row))) for row in rows]
+
+    def __iter__(self):
+        return iter(self._cursor)
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+
+class CompatConnection:
+    def __init__(self, connection):
+        self._conn = connection
+
+    def cursor(self):
+        return CompatCursor(self._conn.cursor(cursor_factory=RealDictCursor))
+
+    def execute(self, sql, params=None):
+        return self.cursor().execute(sql, params)
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def executescript(self, sql):
+        statements = list(iter_sql_statements(sql))
+        cursor = self._conn.cursor()
+        for statement in statements:
+            cursor.execute(prepare_compat_sql(statement))
+        self._conn.commit()
+
+
 def get_db_connection():
+    database_url = Config.DATABASE_URL or os.environ.get("SUPABASE_DATABASE_URL")
+    if database_url:
+        normalized_url = normalize_database_url(database_url)
+        conn = psycopg2.connect(
+            normalized_url,
+            connect_timeout=10,
+            sslmode="require",
+            keepalives=1,
+            keepalives_idle=30,
+            keepalives_interval=10,
+            keepalives_count=5,
+        )
+        conn.autocommit = False
+        return CompatConnection(conn)
+
     db_path = Config.DATABASE_PATH
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path, timeout=10.0)
@@ -20,33 +183,39 @@ def get_db_connection():
         pass
     return conn
 
+
 def init_db(force_reset=False):
-    db_path = Config.DATABASE_PATH
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    
     conn = get_db_connection()
     with open(Config.SCHEMA_PATH, "r", encoding="utf-8") as f:
         schema_sql = f.read()
-    
+
     if force_reset:
         cur_drop = conn.cursor()
-        cur_drop.execute("PRAGMA foreign_keys = OFF;")
-        cur_drop.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = [r[0] for r in cur_drop.fetchall() if not r[0].startswith("sqlite_")]
-        for t in tables:
-            cur_drop.execute(f"DROP TABLE IF EXISTS {t}")
-        cur_drop.execute("PRAGMA foreign_keys = ON;")
+        if isinstance(conn, CompatConnection):
+            cur_drop.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name NOT LIKE 'pg_%' ORDER BY table_name")
+            tables = [row["table_name"] for row in cur_drop.fetchall() if row["table_name"] not in {"spatial_ref_sys"}]
+            for table_name in tables:
+                cur_drop.execute(f'DROP TABLE IF EXISTS "{table_name}" CASCADE')
+        else:
+            cur_drop.execute("PRAGMA foreign_keys = OFF;")
+            cur_drop.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cur_drop.fetchall() if not row[0].startswith("sqlite_")]
+            for table_name in tables:
+                cur_drop.execute(f"DROP TABLE IF EXISTS {table_name}")
+            cur_drop.execute("PRAGMA foreign_keys = ON;")
         conn.commit()
 
-    conn.executescript(schema_sql)
-    
-    # Additive migrations preserve existing competition data.
-    columns = {r["name"] for r in conn.execute("PRAGMA table_info(submissions)")}
+    if isinstance(conn, CompatConnection):
+        conn.executescript(schema_sql)
+    else:
+        conn.executescript(schema_sql)
+
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(submissions)")}
     for name in ("request_id", "response_json"):
         if name not in columns:
             conn.execute(f"ALTER TABLE submissions ADD COLUMN {name} TEXT")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_request ON submissions(team_id, request_id) WHERE request_id IS NOT NULL")
-    session_columns = {r["name"] for r in conn.execute("PRAGMA table_info(fullscreen_sessions)")}
+    session_columns = {row["name"] for row in conn.execute("PRAGMA table_info(fullscreen_sessions)")}
     for name in ("active_event_id", "document_id"):
         if name not in session_columns:
             conn.execute(f"ALTER TABLE fullscreen_sessions ADD COLUMN {name} TEXT")
@@ -54,7 +223,6 @@ def init_db(force_reset=False):
         conn.execute("ALTER TABLE fullscreen_sessions ADD COLUMN document_started_at REAL NOT NULL DEFAULT 0")
     conn.execute("INSERT OR IGNORE INTO competition_controls (id, generation) VALUES (1, ?)", (uuid.uuid4().hex,))
 
-    # Preserve activity collected by the original phase 1 implementation.
     conn.execute("""INSERT INTO team_activity (team_id, event_type, created_at)
         SELECT old.team_id,
                CASE old.event_type WHEN 'focus_lost' THEN 'window_blur'
@@ -68,7 +236,6 @@ def init_db(force_reset=False):
             WHEN 'focus_regained' THEN 'window_focus'
             WHEN 'tab_visible' THEN 'window_visible' ELSE old.event_type END)""")
 
-    # Initialize event_state row if missing
     cur = conn.cursor()
     cfg = Config.load_event_config()
     dur = cfg.get("duration_minutes", 40)
@@ -78,14 +245,12 @@ def init_db(force_reset=False):
             INSERT INTO event_state (id, event_status, duration_minutes, remaining_seconds, is_paused)
             VALUES (1, 'WAITING', ?, ?, 0)
         """, (dur, dur * 60))
-    # Apply configuration changes before a round starts, preserving existing deadlines and progress.
     cur.execute("""
         UPDATE event_state SET duration_minutes = ?, remaining_seconds = ?
         WHERE id = 1 AND event_status = 'WAITING' AND event_start_time IS NULL
     """, (dur, dur * 60))
-    
-    # Versioned, non-destructive bank migration: keep assignments, scores and active flags.
-    question_columns = {r["name"] for r in conn.execute("PRAGMA table_info(questions)")}
+
+    question_columns = {row["name"] for row in conn.execute("PRAGMA table_info(questions)")}
     for name in ("cause_keywords", "correction_keywords"):
         if name not in question_columns:
             conn.execute(f"ALTER TABLE questions ADD COLUMN {name} TEXT")
@@ -113,13 +278,14 @@ def init_db(force_reset=False):
     conn.commit()
     conn.close()
 
+
 def generate_team_id(conn):
     cur = conn.cursor()
     cur.execute("SELECT id FROM teams ORDER BY id DESC")
     rows = cur.fetchall()
     max_num = 0
-    for r in rows:
-        tid = r["id"]
+    for row in rows:
+        tid = row["id"]
         if tid.startswith("EX0-"):
             try:
                 num = int(tid.split("-")[1])
@@ -130,12 +296,8 @@ def generate_team_id(conn):
     next_num = max_num + 1
     return f"EX0-{next_num:03d}"
 
+
 def register_team(team_name, member1, member2, member3=None, email=None, password=None):
-    """
-    Registers a new team of 2–3 members.
-    Enforces non-empty team name and 2-3 members.
-    Prevents duplicate team names.
-    """
     name = (team_name or "").strip()
     m1 = (member1 or "").strip()
     m2 = (member2 or "").strip()
@@ -149,7 +311,6 @@ def register_team(team_name, member1, member2, member3=None, email=None, passwor
     if not m1 or not m2:
         return None, "A team must have at least 2 members (Member 1 and Member 2 are required)."
 
-    # Count valid members
     members = [m1, m2]
     if m3:
         members.append(m3)
@@ -163,46 +324,32 @@ def register_team(team_name, member1, member2, member3=None, email=None, passwor
         conn.execute("BEGIN IMMEDIATE")
         if cur.execute("SELECT results_published FROM competition_controls WHERE id = 1").fetchone()[0]:
             return None, "Registration is closed because final results have been published."
-        # Check duplicate name
         cur.execute("SELECT id FROM teams WHERE UPPER(name) = UPPER(?)", (name,))
         if cur.fetchone():
             return None, f"Team name '{name}' is already registered. Please choose a unique name."
 
         team_id = generate_team_id(conn)
         cur.execute("INSERT INTO teams (id, name) VALUES (?, ?)", (team_id, name))
-
-        # Insert participants
         cur.execute("INSERT INTO participants (team_id, name, role, email) VALUES (?, ?, 'Lead', ?)", (team_id, m1, em))
         cur.execute("INSERT INTO participants (team_id, name, role, email) VALUES (?, ?, 'Member 2', ?)", (team_id, m2, em))
         if m3:
             cur.execute("INSERT INTO participants (team_id, name, role, email) VALUES (?, ?, 'Member 3', ?)", (team_id, m3, em))
+        cur.execute("INSERT INTO scores (team_id, score, bonus_score, completed_count) VALUES (?, 0, 0, 0)", (team_id,))
 
-        # Initialize score row
-        cur.execute("""
-            INSERT INTO scores (team_id, score, bonus_score, completed_count)
-            VALUES (?, 0, 0, 0)
-        """, (team_id,))
-
-        # Initialize power-ups (1 each per team)
         for pu in ["RUBBER_DUCK", "GIT_REVERT", "DOUBLE_COMMIT"]:
             cur.execute("INSERT INTO powerups (team_id, powerup_type, is_used) VALUES (?, ?, 0)", (team_id, pu))
 
-        # Assign initial progressive questions
         assign_initial_questions(team_id, cur)
-
         conn.commit()
         return team_id, None
-    except sqlite3.IntegrityError as e:
+    except (sqlite3.IntegrityError, psycopg2.IntegrityError):
         conn.rollback()
         return None, "Registration could not be saved. Please try a different team name."
     finally:
         conn.close()
 
+
 def assign_initial_questions(team_id, cur=None):
-    """
-    Assigns questions sequentially for the team.
-    Q01 is unlocked immediately, subsequent questions unlock progressively upon submission.
-    """
     close_conn = False
     if cur is None:
         conn = get_db_connection()
@@ -220,7 +367,7 @@ def assign_initial_questions(team_id, cur=None):
         for order, q in enumerate(questions, 1):
             is_unlocked = 1 if order == 1 else 0
             cur.execute("""
-                INSERT OR IGNORE INTO question_assignments 
+                INSERT OR IGNORE INTO question_assignments
                 (team_id, question_id, question_order, is_unlocked, is_completed, is_abandoned)
                 VALUES (?, ?, ?, ?, 0, 0)
             """, (team_id, q["id"], order, is_unlocked))
@@ -231,18 +378,20 @@ def assign_initial_questions(team_id, cur=None):
         if close_conn:
             conn.close()
 
+
 def _answer_summary(conn, team_id, question_id, points, include_submission=False):
     row = conn.execute("SELECT * FROM submissions WHERE team_id = ? AND question_id = ? ORDER BY is_accepted DESC, total_score DESC, id ASC LIMIT 1", (team_id, question_id)).fetchone()
     result = {"is_answered": bool(row), "answer_status": None, "awarded_score": 0, "max_score": points}
     if row:
         evaluation = json.loads(row["response_json"] or "{}")
         raw = sum(row[key] for key in ("error_loc_score", "error_type_score", "cause_score", "output_score", "correction_score"))
-        result.update(awarded_score=row["total_score"], max_score=evaluation.get("max_score", points * (2 if row["is_double_commit"] else 1)),
-                      answer_status=evaluation.get("answer_status") or ("correct" if raw >= points else "partial" if raw > 0 else "incorrect"))
+        result.update(
+            awarded_score=row["total_score"],
+            max_score=evaluation.get("max_score", points * (2 if row["is_double_commit"] else 1)),
+            answer_status=evaluation.get("answer_status") or ("correct" if raw >= points else "partial" if raw > 0 else "incorrect"),
+        )
         if row["override_reason"]:
             result["answer_status"] = "correct" if row["total_score"] >= result["max_score"] else "partial" if row["total_score"] > 0 else "incorrect"
-        # Saved component scores also support older submissions without a stored
-        # field breakdown. Do not regrade or include reference/keyword content.
         result["field_results"] = answer_field_results(dict(row), evaluation.get("base_points", points))
         result["score_overridden"] = bool(row["override_reason"])
         result["penalties"] = evaluation.get("penalties", {})
@@ -254,7 +403,6 @@ def _answer_summary(conn, team_id, question_id, points, include_submission=False
 
 
 def get_team_assigned_questions(team_id):
-    """Returns progression without revealing upcoming question languages or titles."""
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -265,17 +413,14 @@ def get_team_assigned_questions(team_id):
         WHERE qa.team_id = ? AND qa.is_abandoned = 0
         ORDER BY qa.question_order ASC
     """, (team_id,))
-    rows = [dict(r) for r in cur.fetchall()]
+    rows = [dict(row) for row in cur.fetchall()]
     for row in rows:
         row.update(_answer_summary(conn, team_id, row["id"], row["points"]))
     conn.close()
     return rows
 
+
 def get_client_question(team_id, question_id):
-    """
-    Returns sanitized question data for the client.
-    Never exposes bug location, error type, expected output, cause, or correction!
-    """
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -292,8 +437,8 @@ def get_client_question(team_id, question_id):
     conn.close()
     return result
 
+
 def unlock_next_question(team_id, current_order, cur=None):
-    """Unlocks the next sequential question for the team."""
     close_conn = False
     if cur is None:
         conn = get_db_connection()
@@ -302,8 +447,8 @@ def unlock_next_question(team_id, current_order, cur=None):
 
     try:
         cur.execute("""
-            UPDATE question_assignments 
-            SET is_unlocked = 1 
+            UPDATE question_assignments
+            SET is_unlocked = 1
             WHERE team_id = ? AND question_order = ? AND is_abandoned = 0
         """, (team_id, current_order + 1))
         if close_conn:
@@ -311,6 +456,7 @@ def unlock_next_question(team_id, current_order, cur=None):
     finally:
         if close_conn:
             conn.close()
+
 
 def log_admin_action(action, details=""):
     conn = get_db_connection()
@@ -324,13 +470,11 @@ def log_admin_action(action, details=""):
 
 
 def record_activity(team_id, event_type, question_id=None, cur=None):
-    """Only store organizer signals; browser signals never change scores."""
     owned = cur is None
     conn = get_db_connection() if owned else None
     cur = conn.cursor() if owned else cur
     try:
-        cur.execute("INSERT INTO team_activity (team_id, event_type, question_id) VALUES (?, ?, ?)",
-                    (team_id, event_type, question_id))
+        cur.execute("INSERT INTO team_activity (team_id, event_type, question_id) VALUES (?, ?, ?)", (team_id, event_type, question_id))
         if owned:
             conn.commit()
     finally:
