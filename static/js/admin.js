@@ -249,6 +249,10 @@
       if (currentPanel === 'rankings') await refreshLeaderboard();
       if (currentPanel === 'feedback') await refreshFeedback();
     } catch (error) {
+      if (error.status === 401) {
+        location.assign(`/admin/login?next=${encodeURIComponent(location.pathname)}`);
+        return;
+      }
       setConnected(false);
       if (!dashboard) {
         setText('#admin-control-note', 'Unable to sync. Controls will be enabled after a successful server connection.');

@@ -153,6 +153,7 @@
     try {
       const state = await App.request('/api/fullscreen/status');
       apply(state);
+      error.textContent = '';
       if (checkedActivation && !busy && active && checkedActivation === activationID && (!state.is_fullscreen || state.activation_id !== activationID)) { armed = false; show(); }
     } catch (err) { if (err.data?.blocked) apply(err.data); else if (err.status === 401) navigate('/register'); }
   }
