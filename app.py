@@ -109,6 +109,8 @@ def secure_response(response):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     if request.path.startswith("/api/") or session.get("team_id") or session.get("is_admin"):
         response.headers["Cache-Control"] = "no-store"
+    if request.path.startswith("/static/js/"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
     return response
 
 @app.context_processor

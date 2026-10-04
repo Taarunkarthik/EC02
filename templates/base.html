@@ -68,12 +68,12 @@
   </dialog>
   {% endif %}
   <script id="initial-event-state" type="application/json">{{ event_state|tojson }}</script>
-  <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/main.js', v='20261004-2') }}" defer></script>
   <script src="{{ url_for('static', filename='js/timer.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/interactions.js') }}" defer></script>
   <script src="{{ url_for('static', filename='dist/react-bits.js') }}" defer></script>
   {% if participant_protected %}
-  <script src="{{ url_for('static', filename='js/participant-guard.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/participant-guard.js', v='20261004-2') }}" defer></script>
   {% endif %}
   {% block scripts %}{% endblock %}
 </body>
