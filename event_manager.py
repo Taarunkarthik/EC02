@@ -117,6 +117,38 @@ def start_event():
     finally:
         conn.close()
 
+
+def restart_event():
+    """Restart the event clock without deleting teams or competition records."""
+    cfg = Config.load_event_config()
+    duration = cfg.get("duration_minutes", 40)
+    now = datetime.now(timezone.utc)
+    end_dt = now + timedelta(minutes=duration)
+
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("""
+            UPDATE event_state
+            SET event_status = 'LIVE',
+                event_start_time = ?,
+                event_end_time = ?,
+                duration_minutes = ?,
+                is_paused = 0,
+                pause_time = NULL,
+                remaining_seconds = ?
+            WHERE id = 1
+        """, (format_iso(now), format_iso(end_dt), duration, duration * 60))
+        conn.execute("UPDATE competition_controls SET quiz_status = 'WAITING', results_published = 0 WHERE id = 1")
+        conn.commit()
+        log_admin_action("RESTART_EVENT", f"Competition restarted. {duration}-minute timer active until {end_dt.isoformat()}.")
+        return True, "Competition restarted. Existing teams and submissions were preserved."
+    except Exception:
+        conn.rollback()
+        return False, "The event could not be restarted. Please try again."
+    finally:
+        conn.close()
+
 def pause_event():
     """Pauses the active competition and preserves remaining time."""
     state = get_event_state()

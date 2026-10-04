@@ -19,7 +19,7 @@ from scoring import (
 )
 from event_manager import (
     get_event_state, start_event, pause_event, resume_event,
-    end_event, reset_event_data
+    end_event, restart_event, reset_event_data
 )
 
 from participant_policy import guard_snapshot, fullscreen_signal, feedback_snapshot, save_feedback, FEEDBACK_QUESTIONS
@@ -620,6 +620,8 @@ def api_admin_event_action():
     action = (request.get_json() or {}).get("action")
     if action == "start":
         ok, msg = start_event()
+    elif action == "restart":
+        ok, msg = restart_event()
     elif action == "pause":
         ok, msg = pause_event()
     elif action == "resume":

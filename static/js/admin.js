@@ -105,7 +105,7 @@
       countdownAnchor = performance.now();
       updateTimer();
     }
-    const allowed = { start: ['WAITING'], pause: ['LIVE'], resume: ['PAUSED'], end: ['LIVE', 'PAUSED'] };
+    const allowed = { start: ['WAITING'], restart: ['WAITING', 'LIVE', 'PAUSED', 'COMPLETED'], pause: ['LIVE'], resume: ['PAUSED'], end: ['LIVE', 'PAUSED'] };
     $$('[data-event-action]').forEach(button => { button.disabled = actionInFlight || !allowed[button.dataset.eventAction].includes(state.event_status); });
     const notes = {
       WAITING: 'Ready when you are. Starting opens the arena for all eligible teams.',
@@ -295,13 +295,14 @@
       const action = button.dataset.eventAction;
       const confirmations = {
         start: ['Start the debugging round?', `The ${state.duration_minutes || 40}-minute server timer will begin immediately and eligible teams will enter the arena.`, 'Start event'],
+        restart: ['Restart the competition?', `The ${state.duration_minutes || 40}-minute timer will restart now. Teams, submissions and scores will be preserved.`, 'Restart event'],
         pause: ['Pause the competition?', 'The clock will stop and submissions will be temporarily locked. Remaining time is preserved.', 'Pause event'],
         resume: ['Resume the competition?', 'The timer will continue from its remaining time and teams can submit again.', 'Resume event'],
         end: ['End the debugging round?', 'This closes all debugging submissions immediately. The round cannot be resumed after ending.', 'End event']
       };
       const [title, message, confirmText] = confirmations[action];
       if (!await window.App.confirm(message, { title, confirmText, danger: action === 'end' })) return;
-      await performAction(button, '/api/admin/event-action', { action }, ({ start: 'Starting…', pause: 'Pausing…', resume: 'Resuming…', end: 'Ending…' })[action]);
+      await performAction(button, '/api/admin/event-action', { action }, ({ start: 'Starting…', restart: 'Restarting…', pause: 'Pausing…', resume: 'Resuming…', end: 'Ending…' })[action]);
     });
   });
   $$('[data-team-toggle]').forEach(button => button.addEventListener('click', async () => {
