@@ -114,9 +114,9 @@
       label.textContent = pu?.is_used ? 'Used' : pu?.is_armed ? 'Armed for next submission' : descriptions[button.dataset.powerup];
       if (button.dataset.powerup === 'git-revert' && current()?.is_completed) button.disabled = true;
     });
-    fields.forEach(name => { byId(name).disabled = busy || switching || locked || !progress; });
+    fields.forEach(name => { byId(name).disabled = busy || switching || locked; });
     byId('review-toggle').disabled = locked;
-    document.querySelectorAll('#code-viewer-container .line-number').forEach(button => { button.disabled = busy || switching || locked || !progress; });
+    document.querySelectorAll('#code-viewer-container .line-number').forEach(button => { button.disabled = busy || switching || locked; });
   }
   function renderProgress(data) {
     progress = data;
@@ -146,7 +146,16 @@
       const data = await App.request('/api/team-progress');
       if (generation && data.generation !== generation) { navigate('/register'); return; }
       generation = data.generation; renderProgress(data); return data;
-    } catch (err) { if (err.status === 401 || err.status === 403) { byId('arena-state-notice').hidden = false; byId('arena-state-notice').textContent = err.message; progress = null; updateControls(); } }
+    } catch (err) {
+      if (err.status === 401 || err.status === 403) {
+        byId('arena-state-notice').hidden = false;
+        byId('arena-state-notice').textContent = err.message;
+        progress = null;
+        updateControls();
+      } else {
+        setTimeout(() => syncProgress(), 1500);
+      }
+    }
     finally { syncPending = false; }
   }
   async function selectQuestion(id, push = true) {
