@@ -147,7 +147,9 @@
       if (generation && data.generation !== generation) { navigate('/register'); return; }
       generation = data.generation; renderProgress(data); return data;
     } catch (err) {
-      if (err.status === 401 || err.status === 403) {
+      if (err.status === 401) {
+        navigate('/register?tab=login');
+      } else if (err.status === 403) {
         byId('arena-state-notice').hidden = false;
         byId('arena-state-notice').textContent = err.message;
         progress = null;

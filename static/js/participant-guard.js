@@ -96,6 +96,7 @@
       }
       if (navigating) return;
       if (err.data?.blocked) apply(err.data);
+      else if (err.status === 401) navigate('/register?tab=login');
       show(); error.textContent = err.name === 'NotAllowedError' ? 'Fullscreen was not allowed. Click the button to try again.' : err.message;
     } finally { busy = false; button.disabled = blocked; }
   }
@@ -109,6 +110,7 @@
     message.textContent = 'Participation is locked while this departure is recorded. Stay in fullscreen and keep this window focused.';
     flush().catch(err => {
       if (err.data?.blocked) apply(err.data);
+      else if (err.status === 401) navigate('/register?tab=login');
       else error.textContent = 'Unable to record this departure yet. Reconnect to continue; the warning is saved on this device.';
     });
   }
@@ -162,5 +164,9 @@
   window.ParticipantGuard = {ready, enter, navigate, get active() {return active;}};
   if (gate.open) gate.close();
   show();
-  flush().then(check).catch(err => { if (err.data?.blocked) apply(err.data); else error.textContent = err.message; });
+  flush().then(check).catch(err => {
+    if (err.data?.blocked) apply(err.data);
+    else if (err.status === 401) navigate('/register?tab=login');
+    else error.textContent = err.message;
+  });
 })();
